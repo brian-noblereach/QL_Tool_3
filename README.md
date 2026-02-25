@@ -75,9 +75,6 @@ Qualification Tool v03/
 │   │   ├── pipeline.js         # Analysis orchestration
 │   │   └── state-manager.js    # State persistence (localStorage)
 │   └── utils/                  # Utilities (export, formatters, etc.)
-├── proxy-update/
-│   └── Code.gs                 # Google Apps Script proxy (server-side)
-├── JSON Schemas/               # Stack AI workflow output schemas
 └── assets/                     # Icons and logos
 ```
 
@@ -91,65 +88,6 @@ Qualification Tool v03/
 | Database | Smartsheet | Score storage and portfolio tracking |
 | PDF Export | jsPDF | Client-side PDF report generation |
 
----
-
-## Deployment
-
-### Prerequisites
-
-- A [Stack AI](https://www.stack-ai.com/) account with configured workflows
-- A Google Apps Script project deployed as a web app
-- A Smartsheet sheet with the required column structure
-- A static hosting environment (GitHub Pages, SharePoint, etc.)
-
-### 1. Deploy the Google Apps Script Proxy
-
-1. Create a new project at [script.google.com](https://script.google.com)
-2. Copy the contents of `proxy-update/Code.gs` into the project
-3. Update the configuration constants at the top of the file with your own API keys and workflow IDs
-4. Deploy as **Web App** with access set to "Anyone"
-5. Copy the deployment URL and update `proxyUrl` in `js/api/stack-proxy-v2.js` and `js/core/auth.js`
-
-### 2. Set the Access Password
-
-In the Google Apps Script editor:
-
-1. Run the `setPassword` function with your chosen password:
-   ```
-   setPassword('your-access-code')
-   ```
-2. This creates three Script Properties automatically: `PASSWORD_HASH`, `PASSWORD_VERSION`, and `TOKEN_SECRET`
-3. Share the access code with authorized users
-
-### 3. Deploy the Web Application
-
-Host the files on any static web server. No build process required.
-
-For **GitHub Pages**: push to the repository and enable Pages in Settings.
-
----
-
-## Access Control
-
-The platform uses server-side password authentication to restrict access during pilot distribution.
-
-### How it works
-
-- Users enter an access code on first visit
-- The password is verified server-side (never stored in client code)
-- On success, a signed token is stored in the browser for 7 days
-- Subsequent visits verify the token automatically
-
-### Rotating the password
-
-To revoke all access and set a new password:
-
-1. Open the Google Apps Script editor
-2. Run: `setPassword('new-access-code')`
-3. All existing sessions are immediately invalidated
-4. Users will see the login screen on their next visit
-
-No client code changes or redeployment required for password rotation.
 
 ---
 
