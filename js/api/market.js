@@ -18,7 +18,7 @@ const MarketAPI = {
     }
 
     const payload = {
-      'user_id': `market_${Date.now()}`,
+      'user_id': StackProxy.buildUserId('market'),
       'in-0': companyDescription.trim()
     };
 

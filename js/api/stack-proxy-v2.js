@@ -320,10 +320,32 @@ const StackProxy = {
   /**
    * Get/generate user ID for file uploads
    */
+  /**
+   * Get sanitized advisor name tag for use in user IDs
+   */
+  getAdvisorTag() {
+    const name = document.getElementById('sca-name')?.value?.trim()
+      || localStorage.getItem('scaName')
+      || 'anon';
+    return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 20);
+  },
+
+  /**
+   * Build a descriptive user ID for a specific workflow
+   * Format: qual_{advisor}_{workflow}_{MMdd-HHmm}
+   */
+  buildUserId(workflow) {
+    const tag = this.getAdvisorTag();
+    const ts = new Date().toISOString().slice(5, 16).replace(/[-T:]/g, '');
+    return `qual_${tag}_${workflow}_${ts}`;
+  },
+
   getUserId() {
     let userId = sessionStorage.getItem('stack_user_id');
     if (!userId) {
-      userId = 'qual_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+      const tag = this.getAdvisorTag();
+      const ts = new Date().toISOString().slice(5, 16).replace(/[-T:]/g, '');
+      userId = `qual_${tag}_${ts}_${Math.random().toString(36).substring(2, 6)}`;
       sessionStorage.setItem('stack_user_id', userId);
     }
     return userId;

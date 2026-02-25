@@ -23,7 +23,7 @@ const TeamAPI = {
     }
 
     const payload = {
-      'user_id': `team_${Date.now()}`,
+      'user_id': StackProxy.buildUserId('team'),
       'in-0': companyDescription.trim()
     };
 

@@ -59,7 +59,7 @@ const CompanyAPI = {
       } else {
         // URL-only workflow
         const payload = {
-          'user_id': `company_${Date.now()}`,
+          'user_id': StackProxy.buildUserId('company'),
           'in-0': url.trim()
         };
         data = await window.StackProxy.call(workflow, payload, controller.signal);

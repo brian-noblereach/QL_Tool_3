@@ -97,10 +97,11 @@ class StateManager {
     };
   }
 
-  setCompanyInput(url, scaName, fileName = null) {
+  setCompanyInput(url, scaName, fileName = null, portfolio = null) {
     const state = this.getState() || this.createEmptyState();
     state.companyInput = { url, scaName, fileName };
     state.scaName = scaName;
+    state.portfolio = portfolio;
     state.status = 'in_progress';
     state.timestamp = Date.now();
     state.assessmentKey = this.generateAssessmentKey(url, scaName, fileName);

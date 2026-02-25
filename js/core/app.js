@@ -57,6 +57,9 @@ class App {
       // Check for first-time user and show welcome modal
       await this.checkForFirstTimeUser();
 
+      // Populate portfolio dropdown from proxy config
+      this.populatePortfolios();
+
       // Setup pilot banner
       this.setupPilotBanner();
 
@@ -439,6 +442,30 @@ class App {
     }
   }
 
+  /**
+   * Populate portfolio dropdown from proxy config (single source of truth)
+   */
+  async populatePortfolios() {
+    try {
+      const config = await StackProxy.init();
+      const portfolios = config?.portfolios;
+      const select = document.getElementById('portfolio');
+      if (!select || !portfolios?.length) return;
+
+      // Clear existing options except placeholder
+      while (select.options.length > 1) select.remove(1);
+
+      portfolios.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.value;
+        opt.textContent = p.label;
+        select.appendChild(opt);
+      });
+    } catch (e) {
+      console.warn('[App] Could not load portfolio list from proxy:', e.message);
+    }
+  }
+
   setupPilotBanner() {
     const closeBtn = document.getElementById('pilot-close');
     const feedbackBtn = document.getElementById('feedback-btn');
@@ -511,8 +538,9 @@ class App {
       validatedUrl = validation.url;
     }
     
-    // Save input to state
-    this.stateManager.setCompanyInput(validatedUrl || 'Document Upload', scaName, hasFile ? file.name : null);
+    // Save input to state (including portfolio for persistence)
+    const portfolio = document.getElementById('portfolio')?.value || '';
+    this.stateManager.setCompanyInput(validatedUrl || 'Document Upload', scaName, hasFile ? file.name : null, portfolio);
 
     // Clear Smartsheet row ID for new analysis - each new analysis should create a new row
     // This prevents trying to update a row from a previous analysis
@@ -1428,6 +1456,10 @@ class App {
           if (scaInput && assessment.advisorName) {
             scaInput.value = assessment.advisorName;
           }
+          const portfolioSelect = document.getElementById('portfolio');
+          if (portfolioSelect && assessment.portfolio) {
+            portfolioSelect.value = assessment.portfolio;
+          }
 
           // Store the row ID so we update the same row
           if (assessment.smartsheetRowId) {
@@ -1473,6 +1505,8 @@ class App {
 
         if (urlInput && rowData.ventureUrl) urlInput.value = rowData.ventureUrl;
         if (scaInput && rowData.advisorName) scaInput.value = rowData.advisorName;
+        const portfolioSelect = document.getElementById('portfolio');
+        if (portfolioSelect && rowData.portfolio) portfolioSelect.value = rowData.portfolio;
 
         // Store row ID for updating same Smartsheet row
         if (entry.rowId) {
@@ -1486,6 +1520,7 @@ class App {
         const assessment = {
           companyInput: { url: rowData.ventureUrl },
           advisorName: rowData.advisorName,
+          portfolio: rowData.portfolio,
           smartsheetRowId: entry.rowId,
           userScores: {}
         };
@@ -1548,7 +1583,12 @@ class App {
       if (scaInput && assessment.advisorName) {
         scaInput.value = assessment.advisorName;
       }
-      
+      // Restore portfolio selection
+      const portfolioSelect = document.getElementById('portfolio');
+      if (portfolioSelect && assessment.portfolio) {
+        portfolioSelect.value = assessment.portfolio;
+      }
+
       // Show results section
       this.showSection('results');
       
@@ -1655,6 +1695,10 @@ class App {
     }
     if (scaInput && assessment.advisorName) {
       scaInput.value = assessment.advisorName;
+    }
+    const portfolioSelect = document.getElementById('portfolio');
+    if (portfolioSelect && assessment.portfolio) {
+      portfolioSelect.value = assessment.portfolio;
     }
 
     // Store the row ID for updates

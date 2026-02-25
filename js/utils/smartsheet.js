@@ -545,13 +545,16 @@ const SmartsheetIntegration = {
   },
 
   /**
-   * Get portfolio from DOM
+   * Get portfolio from DOM, falling back to saved state
    */
   getPortfolio() {
     const portfolioInput = document.getElementById('portfolio');
     if (portfolioInput && portfolioInput.value) {
       return portfolioInput.value.trim();
     }
+    // Fallback: read from saved state (portfolio may be in hidden input section)
+    const state = window.app?.stateManager?.getState?.();
+    if (state?.portfolio) return state.portfolio;
     return '';
   }
 };

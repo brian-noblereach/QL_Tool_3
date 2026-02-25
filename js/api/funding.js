@@ -22,7 +22,7 @@ const FundingAPI = {
     }
 
     const payload = {
-      'user_id': `funding_${Date.now()}`,
+      'user_id': StackProxy.buildUserId('funding'),
       'in-0': trimmed
     };
 

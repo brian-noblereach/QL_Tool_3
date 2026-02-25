@@ -22,7 +22,7 @@ const CompetitiveAPI = {
     }
 
     const payload = {
-      'user_id': `competitive_${Date.now()}`,
+      'user_id': StackProxy.buildUserId('competitive'),
       'in-0': trimmed
     };
 

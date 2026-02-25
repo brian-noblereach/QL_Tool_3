@@ -22,7 +22,7 @@ const IPRiskAPI = {
     }
 
     const payload = {
-      'user_id': `iprisk_${Date.now()}`,
+      'user_id': StackProxy.buildUserId('iprisk'),
       'in-0': trimmed
     };
 
