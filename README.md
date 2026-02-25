@@ -140,28 +140,6 @@ Scores are automatically saved with:
 
 ---
 
-## Development
-
-### Modifying AI Output Handling
-
-If Stack AI workflow schemas change:
-
-1. Update the output schema in `JSON Schemas/`
-2. Update data parsing in the relevant `js/api/` file
-3. Update validators in `js/utils/validators.js` if needed
-4. Update rendering in `js/components/assessment-view.js`
-5. Update PDF export mappings in `js/utils/export.js`
-
-### Adding New Assessment Dimensions
-
-1. Create an API module in `js/api/`
-2. Add the workflow ID to the proxy configuration
-3. Add a pipeline phase in `js/core/pipeline.js`
-4. Create a data loader and renderer in `js/components/assessment-view.js`
-5. Add tab HTML in `index.html` and styling in `css/styles.css`
-
----
-
 ## Version History
 
 | Version | Date | Changes |
