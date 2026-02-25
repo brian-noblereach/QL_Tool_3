@@ -1,8 +1,8 @@
 # NobleReach Venture Assessment Platform
 
-An AI-powered due diligence tool for evaluating deep-tech ventures across five key dimensions.
+An AI-powered due diligence tool for evaluating deep-tech ventures across six assessment dimensions.
 
-![Version](https://img.shields.io/badge/version-2.1-blue)
+![Version](https://img.shields.io/badge/version-3.0-blue)
 ![Status](https://img.shields.io/badge/status-pilot-orange)
 
 ---
@@ -14,40 +14,39 @@ The Venture Assessment Platform automates initial qualification of deep-tech ven
 ### Key Features
 
 - **Multi-source Analysis**: Analyze ventures using website URLs, uploaded documents (PDF/Word), or both
-- **Five Assessment Dimensions**: Team, Funding, Competitive Landscape, Market Opportunity, IP Risk
-- **AI-Powered Scoring**: Each dimension receives an AI-generated score with detailed evidence
-- **Human-in-the-Loop**: Advisors review AI analysis and provide their own scores with justifications
-- **Score Persistence**: All scores saved to Smartsheet for tracking and comparison
+- **Six Assessment Dimensions**: Researcher Aptitude, Sector Funding, Competitive Winnability, Market Opportunity, IP Landscape, and Solution Value
+- **AI-Powered Scoring**: Five dimensions receive AI-generated scores (1-9) with detailed evidence; Solution Value is human-scored with AI-aggregated evidence
+- **Human-in-the-Loop**: Advisors review AI analysis, adjust scores, and add justifications
+- **Score Persistence**: All scores saved to a database for tracking and comparison
 - **PDF Export**: Generate comprehensive assessment reports
 - **Load Previous**: Reload past assessments for review or score updates
 - **Progress Recovery**: Resume interrupted analyses from checkpoints
+- **Access Control**: Password-protected with server-side token authentication
 
 ---
 
 ## How It Works
 
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Web Browser   │────▶│    Stack AI     │────▶│  AI Workflows   │
-│    (Client)     │     │   (Inference)   │     │  (6 workflows)  │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-         │                                               
-         │              ┌─────────────────┐              
-         └─────────────▶│  Google Apps    │              
-                        │  Script Proxy   │              
-                        └────────┬────────┘              
-                                 │                       
-                        ┌────────▼────────┐              
-                        │   Smartsheet    │              
-                        │   (Score DB)    │              
-                        └─────────────────┘              
+                          ┌─────────────────┐
+                          │   Stack AI      │
+                     ┌───▶│  (6 Workflows)  │
+                     │    └─────────────────┘
+┌─────────────────┐  │
+│   Web Browser   │──┤
+│    (Client)     │  │    ┌─────────────────┐     ┌─────────────────┐
+└─────────────────┘  └───▶│  Google Apps    │────▶│   Smartsheet    │
+                          │  Script Proxy   │     │   (Score DB)    │
+                          │  (Auth + Config)│     └─────────────────┘
+                          └─────────────────┘
 ```
 
-1. **Input**: Enter a company URL and/or upload a document
-2. **Analysis**: AI workflows extract company data and evaluate each dimension
-3. **Review**: Browse results across tabs with summary, detailed, and source views
-4. **Score**: Adjust scores and add justifications based on your expertise
-5. **Export**: Generate PDF reports and save scores to the database
+1. **Authenticate**: Enter the access code provided by your administrator
+2. **Input**: Enter a company URL and/or upload a document
+3. **Analysis**: AI workflows extract company data and evaluate each dimension in parallel
+4. **Review**: Browse results across tabs with summary, detailed, and source views
+5. **Score**: Adjust scores and add justifications based on your expertise
+6. **Export**: Generate PDF reports and save scores to the database
 
 ---
 
@@ -56,46 +55,101 @@ The Venture Assessment Platform automates initial qualification of deep-tech ven
 ### File Structure
 
 ```
-Qualification Tool v02/
-├── index.html              # Single-page application
+Qualification Tool v03/
+├── index.html                  # Single-page application entry point
 ├── css/
-│   └── styles.css          # NobleReach brand styling
+│   └── styles.css              # NobleReach brand styling
 ├── js/
-│   ├── api/                # Stack AI integrations
-│   ├── components/         # UI components
-│   ├── core/               # Application logic
-│   └── utils/              # Utilities & integrations
+│   ├── api/                    # Stack AI workflow integrations
+│   │   ├── stack-proxy-v2.js   # Proxy client (config + file upload)
+│   │   ├── company.js          # Company data extraction
+│   │   ├── team.js             # Researcher aptitude analysis
+│   │   ├── funding.js          # Sector funding analysis
+│   │   ├── competitive.js      # Competitive winnability analysis
+│   │   ├── market.js           # Market opportunity analysis
+│   │   └── iprisk.js           # IP landscape analysis
+│   ├── components/             # UI components (tabs, views, modals)
+│   ├── core/                   # Application logic
+│   │   ├── auth.js             # Access control (token auth)
+│   │   ├── app.js              # Main application controller
+│   │   ├── pipeline.js         # Analysis orchestration
+│   │   └── state-manager.js    # State persistence (localStorage)
+│   └── utils/                  # Utilities (export, formatters, etc.)
 ├── proxy-update/
-│   └── Code.gs             # Google Apps Script proxy
-└── assets/                 # Icons and logos
+│   └── Code.gs                 # Google Apps Script proxy (server-side)
+├── JSON Schemas/               # Stack AI workflow output schemas
+└── assets/                     # Icons and logos
 ```
 
 ### Technology Stack
 
-- **Frontend**: Vanilla JavaScript (no framework dependencies)
-- **AI Backend**: Stack AI workflows
-- **Database**: Smartsheet (via Google Apps Script proxy)
-- **Export**: jsPDF for PDF generation
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Frontend | Vanilla JavaScript | No framework dependencies, runs on any static host |
+| AI Backend | Stack AI | Hosted inference workflows for each assessment dimension |
+| Auth & Proxy | Google Apps Script | Password verification, API config delivery, file uploads |
+| Database | Smartsheet | Score storage and portfolio tracking |
+| PDF Export | jsPDF | Client-side PDF report generation |
 
 ---
 
 ## Deployment
 
-### Web Application
+### Prerequisites
 
-Host the files on any static web server:
-- GitHub Pages
-- SharePoint
-- Any HTTP server
+- A [Stack AI](https://www.stack-ai.com/) account with configured workflows
+- A Google Apps Script project deployed as a web app
+- A Smartsheet sheet with the required column structure
+- A static hosting environment (GitHub Pages, SharePoint, etc.)
 
-No build process required.
-
-### Google Apps Script Proxy
+### 1. Deploy the Google Apps Script Proxy
 
 1. Create a new project at [script.google.com](https://script.google.com)
-2. Copy contents of `proxy-update/Code.gs`
-3. Deploy as Web App with "Anyone" access
-4. Update proxy URL in JavaScript files if needed
+2. Copy the contents of `proxy-update/Code.gs` into the project
+3. Update the configuration constants at the top of the file with your own API keys and workflow IDs
+4. Deploy as **Web App** with access set to "Anyone"
+5. Copy the deployment URL and update `proxyUrl` in `js/api/stack-proxy-v2.js` and `js/core/auth.js`
+
+### 2. Set the Access Password
+
+In the Google Apps Script editor:
+
+1. Run the `setPassword` function with your chosen password:
+   ```
+   setPassword('your-access-code')
+   ```
+2. This creates three Script Properties automatically: `PASSWORD_HASH`, `PASSWORD_VERSION`, and `TOKEN_SECRET`
+3. Share the access code with authorized users
+
+### 3. Deploy the Web Application
+
+Host the files on any static web server. No build process required.
+
+For **GitHub Pages**: push to the repository and enable Pages in Settings.
+
+---
+
+## Access Control
+
+The platform uses server-side password authentication to restrict access during pilot distribution.
+
+### How it works
+
+- Users enter an access code on first visit
+- The password is verified server-side (never stored in client code)
+- On success, a signed token is stored in the browser for 7 days
+- Subsequent visits verify the token automatically
+
+### Rotating the password
+
+To revoke all access and set a new password:
+
+1. Open the Google Apps Script editor
+2. Run: `setPassword('new-access-code')`
+3. All existing sessions are immediately invalidated
+4. Users will see the login screen on their next visit
+
+No client code changes or redeployment required for password rotation.
 
 ---
 
@@ -103,38 +157,41 @@ No build process required.
 
 ### Stack AI Workflows
 
-| Workflow | Purpose |
-|----------|---------|
-| Company (URL/File/Both) | Extract structured company data |
-| Team | Evaluate founding team and leadership |
-| Funding | Analyze funding history and runway |
-| Competitive | Assess competitive landscape and risks |
-| Market | Evaluate market opportunity and timing |
-| IP Risk | Analyze intellectual property position |
+| Workflow | Purpose | Scoring |
+|----------|---------|---------|
+| Company (URL/File/Both) | Extract structured company data | N/A (data source) |
+| Researcher Aptitude | Evaluate team composition, publications, commercialization signals | AI: 1-9 |
+| Sector Funding | Analyze sector deal activity and funding trends | AI: 1-9 |
+| Competitive Winnability | Assess competitive landscape, incumbents, and differentiation | AI: 1-9 |
+| Market Opportunity | Evaluate TAM, CAGR, market segments, and growth potential | AI: 1-9 |
+| IP Landscape | Analyze patent position, freedom to operate, and blocking risk | AI: 1-9 |
+| Solution Value | Aggregate evidence from company, market, and competitive analyses | Human only |
 
 ### Smartsheet Integration
 
-Scores are automatically saved to Smartsheet with:
-- Venture name and URL
+Scores are automatically saved with:
+- Venture name and source URL
 - Advisor name and portfolio
-- AI scores and user scores for each dimension
-- Justification notes
-- Timestamps
+- AI and user scores for each dimension
+- Justification notes and final recommendation
+- Submission timestamps and row IDs for updates
 
 ---
 
 ## Usage
 
-### Basic Workflow
+### Assessment Workflow
 
-1. Open `index.html` in a modern browser (Chrome/Edge recommended)
-2. Enter the venture's website URL
-3. Optionally upload a pitch deck or company document
-4. Enter your name and select portfolio
-5. Click **Start Assessment**
-6. Review AI analysis across each tab
-7. Adjust scores and add justifications
-8. Click **Export PDF** to generate report
+1. Open the application in a modern browser (Chrome or Edge recommended)
+2. Enter the access code when prompted
+3. Enter the venture's website URL and/or upload a pitch deck
+4. Enter your name and select a portfolio
+5. Click **Start Assessment** — analysis runs in parallel (~2-5 minutes)
+6. Review AI analysis across each tab (Summary / Detailed / Sources views)
+7. Adjust scores using the sliders and add justifications
+8. Write a final recommendation
+9. Click **Submit to Portfolio** to save scores
+10. Click **Export PDF** to generate a report
 
 ### Loading Previous Assessments
 
@@ -147,20 +204,23 @@ Scores are automatically saved to Smartsheet with:
 
 ## Development
 
-### Adding New Dimensions
+### Modifying AI Output Handling
 
-1. Create API file in `js/api/`
-2. Add workflow ID to configurations
-3. Add phase to pipeline orchestration
-4. Create data loader in assessment view
-5. Add tab HTML and styling
+If Stack AI workflow schemas change:
 
-### Modifying AI Outputs
+1. Update the output schema in `JSON Schemas/`
+2. Update data parsing in the relevant `js/api/` file
+3. Update validators in `js/utils/validators.js` if needed
+4. Update rendering in `js/components/assessment-view.js`
+5. Update PDF export mappings in `js/utils/export.js`
 
-If Stack AI schema changes:
-1. Update data parsing in relevant API file
-2. Update validators if needed
-3. Update assessment view rendering
+### Adding New Assessment Dimensions
+
+1. Create an API module in `js/api/`
+2. Add the workflow ID to the proxy configuration
+3. Add a pipeline phase in `js/core/pipeline.js`
+4. Create a data loader and renderer in `js/components/assessment-view.js`
+5. Add tab HTML in `index.html` and styling in `css/styles.css`
 
 ---
 
@@ -168,6 +228,7 @@ If Stack AI schema changes:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 3.0 | Feb 2026 | V3 schema migration, access control, UI/UX improvements, PDF export remap, API key hardening |
 | 2.1 | Jan 2026 | Load Previous assessments, Smartsheet row updates, assessment caching |
 | 2.0 | Jan 2026 | Direct browser-to-Stack AI calls, timeout elimination |
 | 1.5 | Dec 2025 | File upload support, structured extraction schema |
@@ -177,9 +238,10 @@ If Stack AI schema changes:
 
 ## Support
 
-- **Technical Issues**: Check browser console for detailed logs
-- **Stack AI**: Verify workflow configuration in Stack AI dashboard
-- **Proxy Issues**: Check Google Apps Script execution logs
+- **Technical Issues**: Open the browser console (F12) for detailed diagnostic logs
+- **Stack AI**: Check workflow status and execution logs in the Stack AI dashboard
+- **Proxy Issues**: Check Google Apps Script execution logs at [script.google.com](https://script.google.com)
+- **Access Issues**: Contact your NobleReach administrator for a valid access code
 
 ---
 
