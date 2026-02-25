@@ -1,0 +1,1715 @@
+// js/core/app.js - Main application controller (V02)
+// Updated with progressive display, state persistence, and component integration
+
+class App {
+  constructor() {
+    this.pipeline = null;
+    this.progressView = null;
+    this.assessmentView = null;
+    this.summaryView = null;
+    this.tabManager = null;
+    this.toastManager = null;
+    this.modalManager = null;
+    this.stateManager = null;
+    this.state = 'idle'; // idle, analyzing, results, error
+  }
+
+  async init() {
+    try {
+      console.log('Initializing Venture Assessment Platform v02...');
+      
+      // Initialize managers
+      this.stateManager = new StateManager();
+      this.stateManager.init();
+      
+      this.tabManager = new TabManager();
+      this.tabManager.init();
+      
+      this.toastManager = new ToastManager();
+      this.toastManager.init();
+      
+      this.modalManager = new ModalManager();
+      this.modalManager.init();
+      
+      // Initialize views
+      this.pipeline = new AnalysisPipeline();
+      this.progressView = new ProgressView();
+      this.assessmentView = new AssessmentView();
+      this.summaryView = new SummaryView();
+      
+      this.progressView.init();
+      this.assessmentView.init();
+      this.summaryView.init();
+      
+      // Make accessible globally
+      window.assessmentView = this.assessmentView;
+      window.summaryView = this.summaryView;
+      window.tabManager = this.tabManager;
+      
+      // Setup event listeners
+      this.setupEventListeners();
+      this.setupPipelineCallbacks();
+      this.setupTabCallbacks();
+      
+      // Check for incomplete analysis
+      await this.checkForIncompleteAnalysis();
+
+      // Check for first-time user and show welcome modal
+      await this.checkForFirstTimeUser();
+
+      // Setup pilot banner
+      this.setupPilotBanner();
+
+      // Check for admin mode (?admin=true in URL)
+      this.adminMode = new URLSearchParams(window.location.search).has('admin');
+      if (this.adminMode) {
+        this.setupAdminMode();
+      }
+
+      console.log('Application initialized successfully');
+      
+    } catch (error) {
+      console.error('Failed to initialize application:', error);
+      this.toastManager?.error('Failed to initialize application. Please refresh the page.');
+    }
+  }
+
+  setupEventListeners() {
+    // Form submission
+    const form = document.getElementById('assessment-form');
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.startAnalysis();
+      });
+    }
+    
+    // New assessment button
+    const newBtn = document.getElementById('new-assessment-btn');
+    if (newBtn) {
+      newBtn.addEventListener('click', () => this.resetAnalysis());
+    }
+    
+    // Export button
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => this.exportReport());
+    }
+    
+    // Cancel button
+    const cancelBtn = document.getElementById('cancel-btn');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => this.cancelAnalysis());
+    }
+    
+    // Load Previous button
+    const loadPreviousBtn = document.getElementById('load-previous-btn');
+    if (loadPreviousBtn) {
+      loadPreviousBtn.addEventListener('click', () => this.loadPreviousAssessment());
+    }
+    
+    // File upload handling
+    this.setupFileUploadListeners();
+
+    // Venture name editor
+    this.setupVentureNameEditor();
+  }
+
+  /**
+   * Set up the editable venture name functionality
+   */
+  setupVentureNameEditor() {
+    const nameText = document.getElementById('venture-name-text');
+    const editBtn = document.getElementById('edit-venture-name-btn');
+    const editSection = document.getElementById('venture-name-edit');
+    const nameInput = document.getElementById('venture-name-input');
+    const saveBtn = document.getElementById('save-venture-name-btn');
+    const cancelBtn = document.getElementById('cancel-venture-name-btn');
+    const hint = document.querySelector('.venture-name-hint');
+
+    if (!nameText || !editBtn || !editSection) return;
+
+    // Edit button click
+    editBtn.addEventListener('click', () => {
+      nameInput.value = nameText.textContent;
+      editSection.classList.remove('hidden');
+      hint.style.display = 'none';
+      nameInput.focus();
+      nameInput.select();
+    });
+
+    // Save button click
+    saveBtn.addEventListener('click', () => {
+      const newName = nameInput.value.trim();
+      if (newName) {
+        this.updateVentureName(newName);
+        editSection.classList.add('hidden');
+        hint.style.display = 'block';
+      }
+    });
+
+    // Cancel button click
+    cancelBtn.addEventListener('click', () => {
+      editSection.classList.add('hidden');
+      hint.style.display = 'block';
+    });
+
+    // Enter key to save
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        saveBtn.click();
+      } else if (e.key === 'Escape') {
+        cancelBtn.click();
+      }
+    });
+  }
+
+  /**
+   * Update the venture name (user override)
+   * @param {string} name - New venture name
+   */
+  updateVentureName(name) {
+    // Update display
+    const nameText = document.getElementById('venture-name-text');
+    if (nameText) {
+      nameText.textContent = name;
+    }
+
+    // Save to state
+    this.stateManager.saveCustomVentureName(name);
+
+    // Show confirmation
+    this.toastManager.success('Venture name updated');
+  }
+
+  /**
+   * Get the current venture name (custom or AI-generated)
+   * @returns {string} The venture name
+   */
+  getVentureName() {
+    // Check for custom name first
+    const customName = this.stateManager.getCustomVentureName();
+    if (customName) return customName;
+
+    // Fall back to AI-generated name
+    const company = this.assessmentView?.data?.company;
+    if (company?.company_overview?.name) {
+      return company.company_overview.name;
+    }
+
+    // Last resort: derive from URL or file
+    const input = this.stateManager.getCompanyInput();
+    if (input?.fileName) {
+      return input.fileName.replace(/\.[^/.]+$/, '');
+    }
+    if (input?.url) {
+      try {
+        const parsed = new URL(input.url.startsWith('http') ? input.url : `https://${input.url}`);
+        return parsed.hostname.replace('www.', '');
+      } catch {
+        return input.url;
+      }
+    }
+
+    return 'Unknown Venture';
+  }
+
+  /**
+   * Set the venture name display (called when AI data loads)
+   * @param {string} aiName - AI-generated name
+   */
+  setVentureNameDisplay(aiName) {
+    const nameText = document.getElementById('venture-name-text');
+    if (!nameText) return;
+
+    // Use custom name if set, otherwise use AI name
+    const customName = this.stateManager.getCustomVentureName();
+    nameText.textContent = customName || aiName || 'Unknown Venture';
+  }
+
+  setupFileUploadListeners() {
+    const fileInput = document.getElementById('company-file');
+    const uploadZone = document.getElementById('file-upload-zone');
+    const fileInfo = document.getElementById('file-selected-info');
+    const fileName = document.getElementById('file-name');
+    const removeBtn = document.getElementById('file-remove-btn');
+    
+    if (!fileInput || !uploadZone) return;
+    
+    // Store selected file reference
+    this.selectedFile = null;
+    
+    // File selection via input
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        this.handleFileSelection(file);
+      }
+    });
+    
+    // Drag and drop events
+    uploadZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      uploadZone.classList.add('drag-over');
+    });
+    
+    uploadZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      uploadZone.classList.remove('drag-over');
+    });
+    
+    uploadZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      uploadZone.classList.remove('drag-over');
+      
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        this.handleFileSelection(files[0]);
+      }
+    });
+    
+    // Remove file button
+    if (removeBtn) {
+      removeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.clearFileSelection();
+      });
+    }
+  }
+  
+  handleFileSelection(file) {
+    const uploadZone = document.getElementById('file-upload-zone');
+    const fileInfo = document.getElementById('file-selected-info');
+    const fileNameEl = document.getElementById('file-name');
+    const fileInput = document.getElementById('company-file');
+    
+    // Validate file type
+    const validTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    const validExtensions = ['.pdf', '.doc', '.docx'];
+    
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+    const isValidType = validTypes.includes(file.type) || validExtensions.includes(fileExtension);
+    
+    if (!isValidType) {
+      uploadZone.classList.add('error');
+      this.toastManager?.error('Please upload a PDF or Word document');
+      setTimeout(() => uploadZone.classList.remove('error'), 3000);
+      return;
+    }
+    
+    // Store file reference
+    this.selectedFile = file;
+    
+    // Update UI
+    uploadZone.classList.add('has-file');
+    uploadZone.classList.remove('error');
+    fileInfo.classList.remove('hidden');
+    fileNameEl.textContent = file.name;
+    
+    console.log('[App] File selected:', file.name, file.type, file.size);
+  }
+  
+  clearFileSelection() {
+    const uploadZone = document.getElementById('file-upload-zone');
+    const fileInfo = document.getElementById('file-selected-info');
+    const fileInput = document.getElementById('company-file');
+    
+    this.selectedFile = null;
+    
+    if (fileInput) fileInput.value = '';
+    if (uploadZone) uploadZone.classList.remove('has-file', 'error');
+    if (fileInfo) fileInfo.classList.add('hidden');
+    
+    console.log('[App] File selection cleared');
+  }
+
+  setupPipelineCallbacks() {
+    this.pipeline.on('start', (data) => {
+      this.state = 'analyzing';
+      console.log('Analysis started:', data.url);
+    });
+    
+    this.pipeline.on('phaseStart', (data) => {
+      this.tabManager.setLoading(data.phase === 'company' ? 'overview' : data.phase);
+      this.updatePhaseUI(data.phase, 'active');
+    });
+    
+    this.pipeline.on('phaseComplete', (data) => {
+      const tabKey = data.phase === 'company' ? 'overview' : data.phase;
+      
+      // Enable tab
+      this.tabManager.enableTab(tabKey);
+      
+      // Update phase list UI
+      this.updatePhaseUI(data.phase, 'complete');
+      
+      // Save checkpoint
+      this.stateManager.checkpoint(data.phase, data.data);
+      
+      // Load data into view
+      this.loadPhaseData(data.phase, data.data);
+      
+      // Show toast notification
+      const phaseNames = {
+        company: 'Company Overview',
+        team: 'Researcher Aptitude',
+        funding: 'Sector Funding Activity',
+        competitive: 'Competitive Winnability',
+        market: 'Market Opportunity',
+        iprisk: 'IP Landscape',
+        solutionvalue: 'Solution Value'
+      };
+      
+      this.toastManager.phaseComplete(phaseNames[data.phase], () => {
+        this.tabManager.activateTab(tabKey);
+      });
+      
+      // Update compact progress
+      this.updateCompactProgress();
+      
+      // Check if all done
+      if (this.tabManager.allReady()) {
+        this.tabManager.enableTab('summary');
+        this.updateCompactProgress(true);
+      }
+    });
+    
+    this.pipeline.on('phaseError', (data) => {
+      const tabKey = data.phase === 'company' ? 'overview' : data.phase;
+      this.tabManager.setError(tabKey);
+      this.updatePhaseUI(data.phase, 'error');
+      
+      this.toastManager.phaseError(data.name, () => {
+        this.retryPhase(data.phase);
+      });
+    });
+    
+    this.pipeline.on('overviewReady', (data) => {
+      // Switch to results view after company analysis
+      this.showSection('results');
+      this.tabManager.activateTab('overview');
+      // Enable Solution Value tab (user can start reviewing as evidence loads)
+      this.tabManager.enableTab('solutionvalue');
+    });
+    
+    this.pipeline.on('complete', (results) => {
+      this.handleAnalysisComplete(results);
+    });
+    
+    this.pipeline.on('error', (error) => {
+      this.handleAnalysisError(error);
+    });
+    
+    this.pipeline.on('cancelled', () => {
+      this.handleAnalysisCancelled();
+    });
+    
+    this.pipeline.on('partialComplete', (data) => {
+      this.handlePartialComplete(data);
+    });
+  }
+
+  setupTabCallbacks() {
+    this.tabManager.onStateChange((event, data) => {
+      if (event === 'tabActivated') {
+        // Update URL hash for deep linking (optional)
+        // history.replaceState(null, '', '#' + data.tabId);
+      }
+    });
+  }
+
+  async checkForIncompleteAnalysis() {
+    if (this.stateManager.hasIncompleteAnalysis()) {
+      const savedState = this.stateManager.getState();
+      const choice = await this.modalManager.showResumeModal(savedState);
+      
+      if (choice === 'resume') {
+        await this.resumeAnalysis(savedState);
+      } else {
+        this.stateManager.clearState();
+      }
+    }
+  }
+
+  setupPilotBanner() {
+    const closeBtn = document.getElementById('pilot-close');
+    const feedbackBtn = document.getElementById('feedback-btn');
+    const banner = document.getElementById('pilot-banner');
+    
+    if (closeBtn && banner) {
+      closeBtn.addEventListener('click', () => {
+        banner.style.display = 'none';
+        localStorage.setItem('pilot_banner_closed', 'true');
+      });
+      
+      // Check if previously closed
+      if (localStorage.getItem('pilot_banner_closed') === 'true') {
+        banner.style.display = 'none';
+      }
+    }
+    
+    if (feedbackBtn) {
+      feedbackBtn.addEventListener('click', () => {
+        window.open('https://forms.osi.office365.us/r/kWXTaUrAAd', '_blank');
+      });
+    }
+  }
+
+  /**
+   * Check if this is a first-time user and show welcome modal
+   */
+  async checkForFirstTimeUser() {
+    // Don't show if user has dismissed it
+    if (localStorage.getItem('welcome_modal_dismissed') === 'true') {
+      return;
+    }
+
+    // Don't show if there's saved state (returning user)
+    if (this.stateManager.hasIncompleteAnalysis()) {
+      return;
+    }
+
+    // Show welcome modal
+    await this.modalManager.showWelcomeModal();
+  }
+
+  async startAnalysis() {
+    const urlInput = document.getElementById('company-url');
+    const scaInput = document.getElementById('sca-name');
+    
+    if (!urlInput) return;
+    
+    const url = urlInput.value.trim();
+    const scaName = scaInput?.value.trim() || '';
+    const file = this.selectedFile;
+    
+    // Validate: need either URL or file
+    const hasUrl = url.length > 0;
+    const hasFile = file instanceof File;
+    
+    if (!hasUrl && !hasFile) {
+      this.showValidationError(urlInput, 'Please enter a company website URL or upload a document');
+      return;
+    }
+    
+    // Validate URL if provided
+    let validatedUrl = null;
+    if (hasUrl) {
+      const validation = Validators.validateUrl(url);
+      if (!validation.valid) {
+        this.showValidationError(urlInput, validation.error);
+        return;
+      }
+      validatedUrl = validation.url;
+    }
+    
+    // Save input to state
+    this.stateManager.setCompanyInput(validatedUrl || 'Document Upload', scaName, hasFile ? file.name : null);
+
+    // Clear Smartsheet row ID for new analysis - each new analysis should create a new row
+    // This prevents trying to update a row from a previous analysis
+    this.stateManager.saveSmartsheetRowId(null);
+    window.SmartsheetIntegration?.clearCurrentRowId();
+
+    // Clear custom venture name for new analysis - AI will generate a new name
+    this.stateManager.saveCustomVentureName(null);
+    // Show cleaned filename as initial name for file uploads, or "Loading..." for URL-only
+    const initialName = file ? file.name.replace(/\.[^/.]+$/, '') : 'Loading...';
+    this.setVentureNameDisplay(initialName);
+
+    // Clear final recommendation for new analysis
+    this.stateManager.saveFinalRecommendation('');
+    const recTextarea = document.getElementById('final-recommendation-text');
+    if (recTextarea) recTextarea.value = '';
+    
+    // Request notification permission
+    await this.requestNotificationPermission();
+    
+    try {
+      // Show progress section
+      this.showSection('progress');
+      
+      // Update progress message based on input type
+      let progressMessage = 'Analyzing: ';
+      if (hasUrl && hasFile) {
+        progressMessage += validatedUrl + ' + ' + file.name;
+      } else if (hasFile) {
+        progressMessage += file.name;
+      } else {
+        progressMessage += validatedUrl;
+      }
+      document.getElementById('progress-company-name').textContent = progressMessage;
+      
+      // Reset assessment state (clears old scores, justifications, submitted flags)
+      this.assessmentView.reset();
+
+      // Reset tab states
+      this.tabManager.reset();
+
+      // Start progress tracking
+      this.progressView.start(this.pipeline);
+      
+      // Run analysis with URL and/or file
+      await this.pipeline.start({ url: validatedUrl, file: file });
+      
+    } catch (error) {
+      console.error('Analysis failed:', error);
+      this.handleAnalysisError(error);
+    }
+  }
+
+  async resumeAnalysis(savedState) {
+    const completedPhases = savedState.completedPhases || {};
+    const userScores = savedState.userScores || {};
+    
+    // Show results section
+    this.showSection('results');
+    
+    // Load completed phases
+    Object.entries(completedPhases).forEach(([phase, data]) => {
+      const tabKey = phase === 'company' ? 'overview' : phase;
+      this.tabManager.enableTab(tabKey);
+      
+      // Company data might be { full, short } or just the data
+      if (phase === 'company') {
+        const companyData = data?.full || data;
+        this.assessmentView.loadCompanyData(companyData);
+        // Set venture name display
+        this.setVentureNameDisplay(companyData?.company_overview?.name);
+      } else {
+        this.loadPhaseData(phase, data);
+      }
+    });
+    
+    // Restore user scores
+    Object.entries(userScores).forEach(([dimension, scoreData]) => {
+      this.assessmentView.setUserScore(dimension, scoreData);
+    });
+
+    // Enable Solution Value tab and refresh evidence
+    this.tabManager.enableTab('solutionvalue');
+    this.assessmentView.loadSolutionValueEvidence();
+
+    // Activate first available tab
+    if (completedPhases.company) {
+      this.tabManager.activateTab('overview');
+    }
+    
+    // Update compact progress
+    this.updateCompactProgress();
+    
+    // Show toast
+    this.toastManager.info('Previous analysis restored. Some phases may need to be re-run.');
+    
+    // TODO: Option to continue remaining phases
+  }
+
+  loadPhaseData(phase, data) {
+    switch (phase) {
+      case 'company':
+        // Company data comes as { full, short } - we need full for display
+        const companyData = data?.full || data;
+        console.log('[App] Loading company data, keys:', Object.keys(companyData || {}));
+        this.assessmentView.loadCompanyData(companyData);
+        // Set venture name display
+        this.setVentureNameDisplay(companyData?.company_overview?.name);
+        // Refresh Solution Value evidence
+        this.assessmentView.loadSolutionValueEvidence();
+        break;
+      case 'team':
+        this.assessmentView.loadTeamData(data);
+        break;
+      case 'funding':
+        this.assessmentView.loadFundingData(data);
+        break;
+      case 'competitive':
+        this.assessmentView.loadCompetitiveData(data);
+        // Refresh Solution Value evidence
+        this.assessmentView.loadSolutionValueEvidence();
+        break;
+      case 'market':
+        this.assessmentView.loadMarketData(data);
+        // Refresh Solution Value evidence
+        this.assessmentView.loadSolutionValueEvidence();
+        break;
+      case 'iprisk':
+        this.assessmentView.loadIpRiskData(data);
+        break;
+    }
+
+    // Progressively cache after each phase so partial assessments appear in "Load Previous"
+    this.cacheCurrentAssessmentProgressively();
+  }
+
+  /**
+   * Cache the current assessment progressively (after each phase completes).
+   * This ensures partial assessments appear in the "Load Previous" list,
+   * even if the user stops mid-analysis or some phases fail.
+   */
+  cacheCurrentAssessmentProgressively() {
+    try {
+      const companyData = this.assessmentView.data.company;
+      const ventureName = companyData?.company_overview?.name ||
+                          this.stateManager.extractVentureName({}) ||
+                          'Unknown';
+
+      this.stateManager.cacheFullAssessment({
+        company: companyData,
+        team: this.assessmentView.data.team,
+        funding: this.assessmentView.data.funding,
+        competitive: this.assessmentView.data.competitive,
+        market: this.assessmentView.data.market,
+        iprisk: this.assessmentView.data.iprisk,
+        ventureName: ventureName
+      });
+    } catch (error) {
+      console.warn('[App] Progressive cache failed:', error);
+    }
+  }
+
+  updatePhaseUI(phase, status) {
+    const phaseItem = document.querySelector(`.phase-item[data-phase="${phase}"]`);
+    if (!phaseItem) return;
+    
+    // Remove previous status classes
+    phaseItem.classList.remove('pending', 'active', 'complete', 'error');
+    phaseItem.classList.add(status);
+    
+    // Update status text
+    const statusEl = phaseItem.querySelector('.phase-status');
+    if (statusEl) {
+      const statusText = {
+        pending: 'Pending',
+        active: 'In Progress...',
+        complete: 'Complete',
+        error: 'Failed'
+      };
+      statusEl.textContent = statusText[status] || status;
+    }
+    
+    // Update icon
+    const iconEl = phaseItem.querySelector('.phase-icon');
+    if (iconEl) {
+      if (status === 'active') {
+        iconEl.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>';
+      } else if (status === 'complete') {
+        iconEl.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+      } else if (status === 'error') {
+        iconEl.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+      }
+    }
+  }
+
+  updateCompactProgress(allComplete = false) {
+    const compactProgress = document.getElementById('compact-progress');
+    if (!compactProgress) return;
+    
+    const readyCount = this.tabManager.getReadyCount();
+    const totalCount = this.tabManager.getTotalCount();
+    
+    if (allComplete) {
+      compactProgress.classList.add('hidden');
+      return;
+    }
+    
+    if (readyCount > 0 && readyCount < totalCount) {
+      compactProgress.classList.remove('hidden');
+      
+      document.getElementById('compact-progress-text').textContent = `${readyCount} of ${totalCount} complete`;
+      document.getElementById('compact-progress-fill').style.width = `${(readyCount / totalCount) * 100}%`;
+      
+      // More accurate remaining time estimate
+      // After company completes, parallel phases take ~3 min, then market takes ~4 min
+      const progress = this.pipeline?.getProgress();
+      if (progress && progress.remaining > 0) {
+        const remainingMin = Math.ceil(progress.remaining / 60);
+        document.getElementById('compact-progress-time').textContent = `~${remainingMin} min remaining`;
+      } else {
+        document.getElementById('compact-progress-time').textContent = 'Almost done...';
+      }
+    }
+  }
+
+  async retryPhase(phase) {
+    try {
+      this.tabManager.setLoading(phase === 'company' ? 'overview' : phase);
+      this.updatePhaseUI(phase, 'active');
+      
+      await this.pipeline.retryPhase(phase);
+    } catch (error) {
+      console.error('Retry failed:', error);
+      this.toastManager.error(`Retry failed: ${error.message}`);
+    }
+  }
+
+  handleAnalysisComplete(results) {
+    this.state = 'results';
+    
+    // Mark state as complete
+    this.stateManager.markComplete();
+    
+    // Cache the full assessment for later reload
+    this.cacheCurrentAssessment(results);
+    
+    // Enable export button
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) exportBtn.disabled = false;
+    
+    // Desktop notification - company data might be { full, short } or just the data
+    const companyFull = results.company?.full || results.company;
+    const companyName = companyFull?.company_overview?.name || 'Company';
+    this.showDesktopNotification(
+      'Analysis Complete!',
+      `${companyName} assessment is ready for review`
+    );
+    
+    // Update summary
+    this.summaryView.update(results);
+    
+    // Hide compact progress
+    const compactProgress = document.getElementById('compact-progress');
+    if (compactProgress) compactProgress.classList.add('hidden');
+    
+    // Toast
+    this.toastManager.success('All analyses complete! You can now export the report.');
+  }
+
+  /**
+   * Cache the current assessment to localStorage for later reload
+   * @param {Object} results - Full analysis results
+   */
+  cacheCurrentAssessment(results) {
+    try {
+      const companyFull = results.company?.full || results.company;
+      const ventureName = companyFull?.company_overview?.name || 'Unknown';
+      
+      this.stateManager.cacheFullAssessment({
+        company: companyFull,
+        team: results.team,
+        funding: results.funding,
+        competitive: results.competitive,
+        market: results.market,
+        iprisk: results.iprisk,
+        ventureName: ventureName
+      });
+      
+      console.log('[App] Assessment cached for:', ventureName);
+    } catch (error) {
+      console.error('[App] Failed to cache assessment:', error);
+    }
+  }
+
+  handleAnalysisError(error) {
+    this.state = 'error';
+    this.progressView.hide();
+    this.toastManager.error(error.message || 'An unexpected error occurred');
+  }
+
+  handleAnalysisCancelled() {
+    this.state = 'idle';
+    this.progressView.hide();
+    this.showSection('input');
+    this.toastManager.info('Analysis cancelled');
+  }
+
+  handlePartialComplete(data) {
+    this.state = 'results';
+
+    // Cache partial results so they appear in "Load Previous"
+    this.cacheCurrentAssessmentProgressively();
+
+    // Some phases failed, but we can still show partial results
+    const failedCount = data.failedPhases.length;
+    const successCount = this.tabManager.getReadyCount();
+    
+    // Enable export button for partial export
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) exportBtn.disabled = false;
+    
+    // Hide main progress section
+    this.progressView.hide();
+    
+    // Update compact progress to show partial completion with warning state
+    this.progressView.showCompactPartialComplete(successCount, failedCount);
+    
+    // Show warning toast
+    this.toastManager.warning(
+      `Analysis completed with ${failedCount} failed phase(s). You can retry failed phases or export partial results.`
+    );
+  }
+
+  cancelAnalysis() {
+    if (this.state !== 'analyzing') return;
+    
+    const confirmed = confirm('Are you sure you want to cancel the analysis?');
+    if (confirmed) {
+      this.pipeline.cancel();
+    }
+  }
+
+  resetAnalysis() {
+    if (this.state === 'analyzing') {
+      const confirmed = confirm('Analysis in progress. Are you sure you want to start over?');
+      if (!confirmed) return;
+      this.pipeline.cancel();
+    }
+    
+    // Clear state
+    this.stateManager.clearState();
+    this.state = 'idle';
+    this.pipeline.reset();
+    this.progressView.reset();
+    this.tabManager.reset();
+    this.assessmentView.reset();
+    
+    // Clear Smartsheet row ID
+    window.SmartsheetIntegration?.clearCurrentRowId();
+    
+    // Clear inputs
+    const urlInput = document.getElementById('company-url');
+    const scaInput = document.getElementById('sca-name');
+    if (urlInput) urlInput.value = '';
+    if (scaInput) scaInput.value = '';
+    
+    // Clear file selection
+    this.clearFileSelection();
+    
+    // Disable export
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) exportBtn.disabled = true;
+    
+    // Show input section
+    this.showSection('input');
+  }
+
+  async exportReport() {
+    try {
+      // Check if all phases complete
+      if (!this.tabManager.allReady()) {
+        const exportStatus = {};
+        ['company', 'team', 'funding', 'competitive', 'market', 'iprisk'].forEach(phase => {
+          const tabKey = phase === 'company' ? 'overview' : phase;
+          exportStatus[phase] = this.tabManager.getState(tabKey) === TabState.READY ? 'complete' : 'pending';
+        });
+        
+        const confirmed = await this.modalManager.showPartialExportModal(exportStatus);
+        if (!confirmed) return;
+      }
+      
+      if (!window.jspdf) {
+        throw new Error('PDF library not loaded. Please refresh the page.');
+      }
+      
+      const data = this.assessmentView.getExportData();
+      
+      this.showExportProgress();
+      const filename = await ExportUtility.generateReport(data);
+      this.hideExportProgress();
+      
+      // Submit all scores to Smartsheet on export
+      await this.submitAllScoresToSmartsheet();
+      
+      this.toastManager.success(`Report exported: ${filename}`);
+      
+    } catch (error) {
+      console.error('Export failed:', error);
+      this.hideExportProgress();
+      this.toastManager.error(`Export failed: ${error.message}`);
+    }
+  }
+
+  showValidationError(input, message) {
+    input.style.borderColor = 'var(--brand-error)';
+    input.focus();
+    
+    let errorEl = input.parentElement.querySelector('.validation-error');
+    if (!errorEl) {
+      errorEl = document.createElement('div');
+      errorEl.className = 'validation-error';
+      errorEl.style.cssText = 'color: var(--brand-error); font-size: 12px; margin-top: 4px;';
+      input.parentElement.appendChild(errorEl);
+    }
+    
+    errorEl.textContent = message;
+    
+    setTimeout(() => {
+      input.style.borderColor = '';
+      if (errorEl) errorEl.remove();
+    }, 5000);
+  }
+
+  showSection(section) {
+    const sections = {
+      input: document.getElementById('input-section'),
+      progress: document.getElementById('progress-section'),
+      results: document.getElementById('results-section')
+    };
+    
+    Object.entries(sections).forEach(([key, el]) => {
+      if (el) {
+        el.classList.toggle('hidden', key !== section);
+      }
+    });
+  }
+
+  showExportProgress() {
+    const overlay = document.createElement('div');
+    overlay.id = 'exportOverlay';
+    overlay.className = 'modal-overlay visible';
+    overlay.innerHTML = '<div class="modal-content" style="text-align: center; padding: 40px;"><div class="spin" style="width: 40px; height: 40px; border: 3px solid var(--slate-200); border-top-color: var(--nr-teal-1); border-radius: 50%; margin: 0 auto 16px;"></div><p>Generating PDF report...</p></div>';
+    document.body.appendChild(overlay);
+  }
+
+  hideExportProgress() {
+    const overlay = document.getElementById('exportOverlay');
+    if (overlay) overlay.remove();
+  }
+
+  async requestNotificationPermission() {
+    if (!("Notification" in window)) return false;
+    if (Notification.permission === "granted") return true;
+    if (Notification.permission !== "denied") {
+      try {
+        const permission = await Notification.requestPermission();
+        return permission === "granted";
+      } catch (e) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  showDesktopNotification(title, body) {
+    if (Notification.permission === "granted") {
+      const notification = new Notification(title, {
+        body,
+        icon: 'assets/favicon.svg',
+        tag: 'analysis-complete',
+        requireInteraction: true
+      });
+      
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+      
+      setTimeout(() => notification.close(), 30000);
+    }
+  }
+
+  /**
+   * Submit all scores to Smartsheet on export
+   */
+  async submitAllScoresToSmartsheet() {
+    if (!window.SmartsheetIntegration) {
+      Debug.warn('SmartsheetIntegration not loaded, skipping submission');
+      return;
+    }
+
+    try {
+      const context = window.SmartsheetIntegration.getContext();
+      
+      const allData = {
+        team: {
+          aiScore: this.assessmentView.aiScores.team,
+          userScore: this.assessmentView.userScores.team.score,
+          justification: this.assessmentView.userScores.team.justification
+        },
+        funding: {
+          aiScore: this.assessmentView.aiScores.funding,
+          userScore: this.assessmentView.userScores.funding.score,
+          justification: this.assessmentView.userScores.funding.justification
+        },
+        competitive: {
+          aiScore: this.assessmentView.aiScores.competitive,
+          userScore: this.assessmentView.userScores.competitive.score,
+          justification: this.assessmentView.userScores.competitive.justification
+        },
+        market: {
+          aiScore: this.assessmentView.aiScores.market,
+          userScore: this.assessmentView.userScores.market.score,
+          justification: this.assessmentView.userScores.market.justification
+        },
+        iprisk: {
+          aiScore: this.assessmentView.aiScores.iprisk,
+          userScore: this.assessmentView.userScores.iprisk.score,
+          justification: this.assessmentView.userScores.iprisk.justification
+        },
+        solutionvalue: {
+          aiScore: null,
+          userScore: this.assessmentView.userScores.solutionvalue.score,
+          justification: this.assessmentView.userScores.solutionvalue.justification
+        }
+      };
+
+      const result = await window.SmartsheetIntegration.submitAllScores(allData, context);
+      if (result?.success) {
+        Debug.log('All scores submitted to Smartsheet');
+      } else {
+        // Submission returned but indicated failure
+        throw new Error(result?.error || 'Submission returned unsuccessful');
+      }
+
+    } catch (error) {
+      Debug.error('Failed to submit scores to Smartsheet:', error.message);
+      // Notify user but don't fail the export
+      this.toastManager?.warning(
+        'Scores saved locally. Database sync failed - will retry on next export.',
+        { duration: 6000 }
+      );
+    }
+  }
+
+  /**
+   * Show final submit confirmation modal when all scores are entered
+   * Called by AssessmentView when all 5 dimension scores are submitted
+   * Redirects user to Summary tab to add final recommendation before submitting
+   */
+  async showFinalSubmitModal() {
+    const modalHtml = `
+      <div class="modal-header">
+        <h3>
+          <svg class="modal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          All Scores Submitted!
+        </h3>
+      </div>
+      <div class="modal-body">
+        <p>You've submitted scores for all 6 dimensions.</p>
+        <p>Go to the <strong>Summary</strong> tab to review your scores, add your final recommendation, and submit your complete assessment.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn primary" data-action="go-to-summary">Go to Summary</button>
+      </div>
+    `;
+
+    this.modalManager.show(modalHtml, (action) => {
+      if (action === 'go-to-summary') {
+        this.tabManager.activateTab('summary');
+      }
+    });
+  }
+
+  /**
+   * Submit final averaged scores to Smartsheet
+   */
+  async submitFinalScores() {
+    try {
+      await this.submitAllScoresToSmartsheet();
+
+      // Enable export button if not already enabled
+      const exportBtn = document.getElementById('export-btn');
+      if (exportBtn) exportBtn.disabled = false;
+
+    } catch (error) {
+      console.error('Error submitting final scores:', error);
+      this.toastManager.error('Failed to submit scores. Please try exporting the report.');
+    }
+  }
+
+  /**
+   * Submit final assessment with recommendation text to Smartsheet
+   * Called from SummaryView when user clicks "Submit Final Assessment"
+   * @param {string} recommendationText - The final recommendation text
+   */
+  async submitFinalAssessmentWithRecommendation(recommendationText) {
+    if (!window.SmartsheetIntegration) {
+      throw new Error('SmartsheetIntegration not loaded');
+    }
+
+    // Get base context
+    const context = window.SmartsheetIntegration.getContext();
+
+    // Add the final recommendation
+    context.finalRecommendation = recommendationText;
+
+    // Gather all score data
+    const allData = {
+      team: {
+        aiScore: this.assessmentView.aiScores.team,
+        userScore: this.assessmentView.userScores.team?.score,
+        justification: this.assessmentView.userScores.team?.justification
+      },
+      funding: {
+        aiScore: this.assessmentView.aiScores.funding,
+        userScore: this.assessmentView.userScores.funding?.score,
+        justification: this.assessmentView.userScores.funding?.justification
+      },
+      competitive: {
+        aiScore: this.assessmentView.aiScores.competitive,
+        userScore: this.assessmentView.userScores.competitive?.score,
+        justification: this.assessmentView.userScores.competitive?.justification
+      },
+      market: {
+        aiScore: this.assessmentView.aiScores.market,
+        userScore: this.assessmentView.userScores.market?.score,
+        justification: this.assessmentView.userScores.market?.justification
+      },
+      iprisk: {
+        aiScore: this.assessmentView.aiScores.iprisk,
+        userScore: this.assessmentView.userScores.iprisk?.score,
+        justification: this.assessmentView.userScores.iprisk?.justification
+      },
+      solutionvalue: {
+        aiScore: null,
+        userScore: this.assessmentView.userScores.solutionvalue?.score,
+        justification: this.assessmentView.userScores.solutionvalue?.justification
+      }
+    };
+
+    // Submit to Smartsheet
+    const result = await window.SmartsheetIntegration.submitAllScores(allData, context);
+
+    if (!result?.success) {
+      throw new Error(result?.error || 'Submission failed');
+    }
+
+    // Save recommendation to state
+    this.stateManager.saveFinalRecommendation(recommendationText);
+
+    // Enable export button
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) exportBtn.disabled = false;
+
+    Debug.log('Final assessment with recommendation submitted');
+    return result;
+  }
+
+  /**
+   * Retry a failed phase from the tab panel
+   * @param {string} phase - Phase key to retry
+   */
+  async retryFromTab(phase) {
+    try {
+      await this.retryPhase(phase);
+    } catch (error) {
+      console.error('Retry from tab failed:', error);
+      this.toastManager.error(`Retry failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Capitalize first letter of string
+   */
+  // ========== ADMIN MODE ==========
+
+  /**
+   * Set up admin mode for JSON import when ?admin=true is in the URL.
+   * This is hidden from regular users — only accessible by admins.
+   */
+  setupAdminMode() {
+    document.body.classList.add('admin-mode');
+    console.log('[Admin] Admin mode activated');
+
+    const adminPanel = document.getElementById('admin-panel');
+    const importBtn = document.getElementById('admin-import-btn');
+    const clearBtn = document.getElementById('admin-clear-btn');
+    const closeBtn = document.getElementById('admin-close-btn');
+
+    if (!adminPanel) return;
+
+    // Show the admin panel
+    adminPanel.classList.remove('hidden');
+
+    // Close button
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        adminPanel.classList.add('hidden');
+      });
+    }
+
+    // Clear all textareas
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        const phases = ['company', 'team', 'funding', 'competitive', 'market', 'iprisk'];
+        phases.forEach(phase => {
+          const textarea = document.getElementById(`admin-${phase}-json`);
+          const status = document.getElementById(`admin-${phase}-status`);
+          if (textarea) textarea.value = '';
+          if (status) { status.textContent = ''; status.className = 'admin-status'; }
+        });
+        const nameInput = document.getElementById('admin-venture-name');
+        const advisorInput = document.getElementById('admin-advisor-name');
+        if (nameInput) nameInput.value = '';
+        if (advisorInput) advisorInput.value = '';
+      });
+    }
+
+    // Import button
+    if (importBtn) {
+      importBtn.addEventListener('click', () => this.adminImportAssessment());
+    }
+  }
+
+  /**
+   * Import assessment data from pasted JSON (admin only).
+   * Parses each phase's JSON, loads into assessment view, enables tabs.
+   */
+  adminImportAssessment() {
+    const phases = ['company', 'team', 'funding', 'competitive', 'market', 'iprisk'];
+    const parsedData = {};
+    let hasAnyData = false;
+    let hasErrors = false;
+
+    // Parse each phase JSON
+    phases.forEach(phase => {
+      const textarea = document.getElementById(`admin-${phase}-json`);
+      const status = document.getElementById(`admin-${phase}-status`);
+      const raw = textarea?.value?.trim();
+
+      if (!raw) {
+        if (status) { status.textContent = ''; status.className = 'admin-status'; }
+        return;
+      }
+
+      try {
+        let data = JSON.parse(raw);
+
+        // Handle Stack AI response wrapping — unwrap if needed
+        if (data.output && typeof data.output === 'object') {
+          data = data.output;
+        }
+        if (data.result && typeof data.result === 'object' && !Array.isArray(data.result)) {
+          data = data.result;
+        }
+        // Some exports wrap the actual data one level deeper
+        if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+          data = data.data;
+        }
+
+        parsedData[phase] = data;
+        hasAnyData = true;
+        if (status) { status.textContent = 'OK'; status.className = 'admin-status admin-ok'; }
+      } catch (error) {
+        hasErrors = true;
+        if (status) { status.textContent = 'Error'; status.className = 'admin-status admin-error'; }
+        console.error(`[Admin] Failed to parse ${phase} JSON:`, error.message);
+      }
+    });
+
+    if (hasErrors) {
+      this.toastManager.warning('Some JSON fields had parse errors. Check the status indicators.');
+    }
+
+    if (!hasAnyData) {
+      this.toastManager.error('No valid JSON data to import. Paste JSON into at least one field.');
+      return;
+    }
+
+    // Get venture/advisor names
+    const ventureName = document.getElementById('admin-venture-name')?.value?.trim() || 'Admin Import';
+    const advisorName = document.getElementById('admin-advisor-name')?.value?.trim() ||
+                        document.getElementById('sca-name')?.value?.trim() || 'Admin';
+
+    // Reset current state
+    this.assessmentView.reset();
+    this.pipeline.reset();
+    this.tabManager.reset();
+    this.stateManager.clearState();
+    window.SmartsheetIntegration?.clearCurrentRowId();
+
+    // Set up state for this import
+    this.stateManager.setCompanyInput('Admin Import', advisorName, null);
+    this.stateManager.saveCustomVentureName(ventureName);
+
+    // Show results section
+    this.showSection('results');
+    this.state = 'results';
+
+    // Load each phase's data
+    if (parsedData.company) {
+      this.tabManager.enableTab('overview');
+      this.loadPhaseData('company', parsedData.company);
+      this.setVentureNameDisplay(parsedData.company?.company_overview?.name || ventureName);
+    } else {
+      this.setVentureNameDisplay(ventureName);
+    }
+
+    phases.filter(p => p !== 'company').forEach(phase => {
+      if (parsedData[phase]) {
+        this.tabManager.enableTab(phase);
+        this.loadPhaseData(phase, parsedData[phase]);
+      }
+    });
+
+    // Enable Solution Value tab and refresh evidence
+    this.tabManager.enableTab('solutionvalue');
+    this.assessmentView.loadSolutionValueEvidence();
+
+    // Enable summary if enough data
+    if (this.tabManager.allReady()) {
+      this.tabManager.enableTab('summary');
+    }
+
+    // Enable export
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) exportBtn.disabled = false;
+
+    // Activate first available tab
+    this.tabManager.activateTab('overview');
+
+    // Cache the imported assessment
+    this.cacheCurrentAssessmentProgressively();
+
+    // Hide admin panel
+    const adminPanel = document.getElementById('admin-panel');
+    if (adminPanel) adminPanel.classList.add('hidden');
+
+    this.toastManager.success(`Assessment imported for ${ventureName}`);
+    console.log('[Admin] Assessment imported:', { ventureName, phases: Object.keys(parsedData) });
+  }
+
+  capitalize(str) {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  /**
+   * Load a previous assessment from cache
+   * Shows a modal with list of cached assessments
+   */
+  async loadPreviousAssessment() {
+    try {
+      // Get list of cached assessments
+      const assessments = this.stateManager.listPastAssessments();
+
+      // Show modal for selection (modal now supports both local and Smartsheet sources)
+      const selected = await this.modalManager.showLoadPreviousModal(assessments);
+
+      if (!selected) {
+        // User cancelled
+        return;
+      }
+
+      // Handle Smartsheet-sourced assessment
+      if (selected._source === 'smartsheet') {
+        await this.loadFromSmartsheetEntry(selected);
+        return;
+      }
+
+      // Handle local cache assessment
+      const assessment = this.stateManager.loadAssessment(selected.key);
+
+      if (!assessment) {
+        this.toastManager.error('Could not load assessment data');
+        return;
+      }
+
+      // Check if we have full data or just scores
+      const hasFullData = assessment.aiData &&
+        Object.values(assessment.aiData).some(v => v !== null);
+
+      if (hasFullData) {
+        // Restore full assessment
+        await this.restoreFromCachedAssessment(assessment);
+        this.toastManager.success(`Loaded assessment for ${selected.ventureName}`);
+      } else {
+        // Show notification that we only have scores
+        const action = await this.modalManager.showScoresOnlyLoadedModal(selected.ventureName);
+
+        if (action === 'rerun') {
+          // Pre-fill URL and start new analysis
+          const urlInput = document.getElementById('company-url');
+          const scaInput = document.getElementById('sca-name');
+
+          if (urlInput && assessment.companyInput?.url) {
+            urlInput.value = assessment.companyInput.url;
+          }
+          if (scaInput && assessment.advisorName) {
+            scaInput.value = assessment.advisorName;
+          }
+
+          // Store the row ID so we update the same row
+          if (assessment.smartsheetRowId) {
+            this.stateManager.saveSmartsheetRowId(assessment.smartsheetRowId);
+            window.SmartsheetIntegration?.setCurrentRowId(assessment.smartsheetRowId);
+          }
+
+          this.toastManager.info('Ready to re-run analysis. Click "Start Assessment" when ready.');
+        } else {
+          // Just load scores for editing
+          await this.restoreScoresOnly(assessment);
+          this.toastManager.info(`Scores loaded for ${selected.ventureName}`);
+        }
+      }
+
+    } catch (error) {
+      console.error('[App] Error loading previous assessment:', error);
+      this.toastManager.error('Failed to load assessment');
+    }
+  }
+
+  /**
+   * Load an assessment from a Smartsheet entry (scores only, no AI data).
+   * @param {Object} entry - Smartsheet assessment row data
+   */
+  async loadFromSmartsheetEntry(entry) {
+    try {
+      // Load full row data from Smartsheet
+      let rowData = entry;
+      if (entry.rowId && window.SmartsheetIntegration) {
+        const fullData = await window.SmartsheetIntegration.loadFromSmartsheet(entry.rowId);
+        if (fullData) rowData = fullData;
+      }
+
+      // Show scores-only modal
+      const ventureName = rowData.ventureName || 'Unknown Venture';
+      const action = await this.modalManager.showScoresOnlyLoadedModal(ventureName);
+
+      if (action === 'rerun') {
+        // Pre-fill URL for re-run
+        const urlInput = document.getElementById('company-url');
+        const scaInput = document.getElementById('sca-name');
+
+        if (urlInput && rowData.ventureUrl) urlInput.value = rowData.ventureUrl;
+        if (scaInput && rowData.advisorName) scaInput.value = rowData.advisorName;
+
+        // Store row ID for updating same Smartsheet row
+        if (entry.rowId) {
+          this.stateManager.saveSmartsheetRowId(entry.rowId);
+          window.SmartsheetIntegration?.setCurrentRowId(entry.rowId);
+        }
+
+        this.toastManager.info('Ready to re-run analysis. Click "Start Assessment" when ready.');
+      } else {
+        // Build a minimal assessment-like object for restoreScoresOnly
+        const assessment = {
+          companyInput: { url: rowData.ventureUrl },
+          advisorName: rowData.advisorName,
+          smartsheetRowId: entry.rowId,
+          userScores: {}
+        };
+
+        // Map Smartsheet fields back to userScores
+        const scoreMap = {
+          team: { scoreKey: 'teamScoreUser', justKey: 'teamJustification' },
+          funding: { scoreKey: 'fundingScoreUser', justKey: 'fundingJustification' },
+          competitive: { scoreKey: 'competitiveScoreUser', justKey: 'competitiveJustification' },
+          market: { scoreKey: 'marketScoreUser', justKey: 'marketJustification' },
+          iprisk: { scoreKey: 'ipRiskScoreUser', justKey: 'ipRiskJustification' },
+          solutionvalue: { scoreKey: 'solutionValueScoreUser', justKey: 'solutionValueJustification' }
+        };
+
+        Object.entries(scoreMap).forEach(([dim, keys]) => {
+          const score = rowData[keys.scoreKey];
+          const justification = rowData[keys.justKey];
+          if (score !== undefined && score !== null) {
+            assessment.userScores[dim] = {
+              score: parseFloat(score),
+              justification: justification || '',
+              submitted: true,
+              timesSubmitted: 1
+            };
+          }
+        });
+
+        await this.restoreScoresOnly(assessment);
+        this.toastManager.success(`Scores loaded from Smartsheet for ${ventureName}`);
+      }
+    } catch (error) {
+      console.error('[App] Error loading from Smartsheet:', error);
+      this.toastManager.error('Failed to load from Smartsheet');
+    }
+  }
+
+  /**
+   * Restore a full cached assessment (with AI data)
+   * @param {Object} assessment - Cached assessment data
+   */
+  async restoreFromCachedAssessment(assessment) {
+    try {
+      // Reset current state
+      this.pipeline.reset();
+      this.tabManager.reset();
+      
+      // Restore Smartsheet row ID if present
+      if (assessment.smartsheetRowId) {
+        this.stateManager.saveSmartsheetRowId(assessment.smartsheetRowId);
+        window.SmartsheetIntegration?.setCurrentRowId(assessment.smartsheetRowId);
+      }
+      
+      // Pre-fill URL input
+      const urlInput = document.getElementById('company-url');
+      const scaInput = document.getElementById('sca-name');
+      
+      if (urlInput && assessment.companyInput?.url && assessment.companyInput.url !== 'Document Upload') {
+        urlInput.value = assessment.companyInput.url;
+      }
+      if (scaInput && assessment.advisorName) {
+        scaInput.value = assessment.advisorName;
+      }
+      
+      // Show results section
+      this.showSection('results');
+      
+      // Load company data if available
+      if (assessment.aiData.company) {
+        this.tabManager.enableTab('overview');
+        const companyData = assessment.aiData.company?.full || assessment.aiData.company;
+        this.assessmentView.loadCompanyData(companyData);
+        // Set venture name from restored data
+        this.setVentureNameDisplay(companyData?.company_overview?.name);
+      }
+      
+      // Load each dimension
+      const dimensions = ['team', 'funding', 'competitive', 'market', 'iprisk'];
+
+      dimensions.forEach(dim => {
+        if (assessment.aiData[dim]) {
+          this.tabManager.enableTab(dim);
+          this.loadPhaseData(dim, assessment.aiData[dim]);
+        }
+      });
+
+      // Enable Solution Value tab and refresh evidence
+      this.tabManager.enableTab('solutionvalue');
+      this.assessmentView.loadSolutionValueEvidence();
+      
+      // Restore user scores
+      if (assessment.userScores) {
+        Object.entries(assessment.userScores).forEach(([dim, scoreData]) => {
+          if (scoreData) {
+            this.assessmentView.setUserScore(dim, scoreData);
+            
+            // Mark as submitted if it was
+            if (scoreData.score !== null) {
+              this.assessmentView.userScores[dim].submitted = true;
+              this.assessmentView.userScores[dim].timesSubmitted = 1;
+              
+              // Update submit button state
+              const submitBtn = document.getElementById(`${dim}-submit-btn`);
+              const scoringCard = document.getElementById(`${dim}-scoring-card`);
+              
+              if (submitBtn) {
+                submitBtn.classList.add('update-mode');
+                submitBtn.innerHTML = `
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  Update Score
+                `;
+              }
+              
+              if (scoringCard) {
+                scoringCard.classList.add('has-submission');
+              }
+            }
+          }
+        });
+      }
+      
+      // Check if summary tab should be enabled
+      if (this.tabManager.allReady()) {
+        this.tabManager.enableTab('summary');
+        
+        // Update summary view
+        this.summaryView.update({
+          company: assessment.aiData.company,
+          team: assessment.aiData.team,
+          funding: assessment.aiData.funding,
+          competitive: assessment.aiData.competitive,
+          market: assessment.aiData.market,
+          iprisk: assessment.aiData.iprisk
+        });
+      }
+      
+      // Activate first tab
+      this.tabManager.activateTab('overview');
+      
+      // Enable export button
+      const exportBtn = document.getElementById('export-btn');
+      if (exportBtn) exportBtn.disabled = false;
+      
+      this.state = 'results';
+      
+    } catch (error) {
+      console.error('[App] Error restoring cached assessment:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Restore only scores (no AI data) - limited functionality
+   * @param {Object} assessment - Cached assessment with user scores only
+   */
+  async restoreScoresOnly(assessment) {
+    // Partial restore - we don't have AI data but we can show/edit scores
+
+    // Pre-fill URL input
+    const urlInput = document.getElementById('company-url');
+    const scaInput = document.getElementById('sca-name');
+
+    if (urlInput && assessment.companyInput?.url && assessment.companyInput.url !== 'Document Upload') {
+      urlInput.value = assessment.companyInput.url;
+    }
+    if (scaInput && assessment.advisorName) {
+      scaInput.value = assessment.advisorName;
+    }
+
+    // Store the row ID for updates
+    if (assessment.smartsheetRowId) {
+      this.stateManager.saveSmartsheetRowId(assessment.smartsheetRowId);
+      window.SmartsheetIntegration?.setCurrentRowId(assessment.smartsheetRowId);
+    }
+
+    // Restore user scores to UI so they're visible and editable
+    if (assessment.userScores) {
+      // Reset assessment view first to clear any stale state
+      this.assessmentView.reset();
+
+      Object.entries(assessment.userScores).forEach(([dim, scoreData]) => {
+        if (scoreData && scoreData.score !== null && scoreData.score !== undefined) {
+          this.assessmentView.setUserScore(dim, scoreData);
+
+          // Mark as submitted if it was
+          this.assessmentView.userScores[dim].submitted = true;
+          this.assessmentView.userScores[dim].timesSubmitted = 1;
+
+          // Update submit button to "Update Score" mode
+          const submitBtn = document.getElementById(`${dim}-submit-btn`);
+          const scoringCard = document.getElementById(`${dim}-scoring-card`);
+
+          if (submitBtn) {
+            submitBtn.classList.add('update-mode');
+            submitBtn.innerHTML = `
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Update Score
+            `;
+          }
+
+          if (scoringCard) {
+            scoringCard.classList.add('has-submission');
+          }
+        }
+      });
+    }
+  }
+}
+
+// Initialize when DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+  window.app = new App();
+  window.app.init();
+});
+
+// Warn before leaving during analysis
+window.addEventListener('beforeunload', (e) => {
+  if (window.app && window.app.state === 'analyzing') {
+    e.preventDefault();
+    e.returnValue = 'Analysis in progress. Are you sure you want to leave?';
+  }
+});
