@@ -1700,11 +1700,8 @@ class App {
   }
 }
 
-// Initialize when DOM ready
-document.addEventListener('DOMContentLoaded', () => {
-  window.app = new App();
-  window.app.init();
-});
+// App initialization is handled by auth.js in index.html
+// Auth gate verifies access before calling new App().init()
 
 // Warn before leaving during analysis
 window.addEventListener('beforeunload', (e) => {

@@ -92,22 +92,22 @@ const StackProxy = {
               }
             }
           } catch (e) {
-            // If we can't read iframe (cross-origin), use fallback config
-            Debug.warn('[StackProxy] Cannot read config from iframe, using fallback');
+            // If we can't read iframe (cross-origin), reject — proxy is required
+            Debug.error('[StackProxy] Cannot read config from iframe');
             completed = true;
             cleanup();
-            resolve(this.getFallbackConfig());
+            reject(new Error('Unable to load API configuration. Please refresh and try again.'));
           }
         }, 500);
       };
 
-      // Timeout - use fallback config
+      // Timeout — proxy is required, no fallback
       setTimeout(() => {
         if (!completed) {
-          Debug.warn('[StackProxy] Config fetch timeout, using fallback');
+          Debug.error('[StackProxy] Config fetch timeout');
           completed = true;
           cleanup();
-          resolve(this.getFallbackConfig());
+          reject(new Error('API configuration timeout. Please check your connection and refresh.'));
         }
       }, timeoutMs);
 
@@ -116,28 +116,6 @@ const StackProxy = {
     });
   },
 
-  /**
-   * Fallback config in case proxy is unreachable
-   * Note: publicKey is safe to expose (used for inference only)
-   */
-  getFallbackConfig() {
-    return {
-      baseUrl: 'https://api.stack-ai.com/inference/v0/run/f913a8b8-144d-47e0-b327-8daa341b575d',
-      docsUrl: 'https://api.stack-ai.com/documents/f913a8b8-144d-47e0-b327-8daa341b575d',
-      publicKey: 'e80f3814-a651-4de7-a7ba-8478b7a9047b',
-      workflows: {
-        company_url: '699cd53e0161be88cadfc499',
-        company_file: '699cd540fa92361c93b5b9d7',
-        company_both: '699cd238fa92361c93b5b9d5',
-        team: '699ccc503a5448758d9488ca',
-        funding: '699c70dc595d31874ae6fecb',
-        competitive: '699c878404f8ccba5a8ee180',
-        market: '699cbfbbfbeb7b9535fcd4df',
-        iprisk: '699cc4a3404c0bda303f69e4'
-      }
-    };
-  },
-  
   /**
    * Call a Stack AI workflow directly (no proxy for inference)
    */

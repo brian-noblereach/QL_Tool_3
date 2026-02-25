@@ -103,6 +103,84 @@ body {
   border: 0;
 }
 
+/* ---------- Access Control Overlay ---------- */
+
+.auth-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--slate-50);
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-overlay.active {
+  display: flex;
+}
+
+.auth-card {
+  text-align: center;
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 48px 40px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  max-width: 380px;
+  width: 100%;
+}
+
+.auth-card h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--slate-900);
+  margin: 16px 0 4px;
+}
+
+.auth-subtitle {
+  font-size: 13px;
+  color: var(--slate-500);
+  margin-bottom: 24px;
+}
+
+.auth-form {
+  display: flex;
+  gap: 8px;
+}
+
+.auth-form input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--slate-300);
+  border-radius: var(--radius);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.auth-form input:focus {
+  border-color: var(--nr-teal-1);
+  box-shadow: 0 0 0 3px rgba(0, 130, 165, 0.1);
+}
+
+.auth-form .btn {
+  padding: 10px 20px;
+  white-space: nowrap;
+}
+
+.auth-error {
+  color: #dc2626;
+  font-size: 13px;
+  min-height: 20px;
+  margin-top: 12px;
+}
+
+.auth-note {
+  font-size: 11px;
+  color: var(--slate-400);
+  margin-top: 20px;
+}
+
 /* ---------- Pilot Banner ---------- */
 .pilot-banner {
   background: linear-gradient(90deg, var(--nr-orange-1), var(--nr-orange-2));
