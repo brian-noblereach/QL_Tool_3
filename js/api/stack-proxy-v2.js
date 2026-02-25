@@ -27,81 +27,50 @@ const StackProxy = {
   },
   
   /**
-   * Fetch API config from proxy using iframe to avoid CORS issues
+   * Fetch API config from proxy using JSONP to avoid CORS issues.
+   * GAS web apps redirect cross-origin, making iframe reads unreliable.
+   * JSONP works reliably because <script> tags follow redirects natively.
    */
   async fetchConfig() {
     return new Promise((resolve, reject) => {
-      const timeoutMs = 10000;
+      const timeoutMs = 15000;
       let completed = false;
 
-      // Create a hidden iframe to fetch the config
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.name = 'configFrame_' + Date.now();
-      document.body.appendChild(iframe);
+      // Unique callback name for this request
+      const callbackName = '_stackConfig_' + Date.now();
 
-      // Create form to submit GET request via iframe
-      const form = document.createElement('form');
-      form.method = 'GET';
-      form.action = this.proxyUrl;
-      form.target = iframe.name;
-      form.style.display = 'none';
+      // Register global callback
+      window[callbackName] = (data) => {
+        if (completed) return;
+        completed = true;
+        cleanup();
 
-      // Add action parameter
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = 'action';
-      input.value = 'config';
-      form.appendChild(input);
+        if (data.success && data.config) {
+          resolve(data.config);
+        } else {
+          reject(new Error(data.error || 'Invalid config response'));
+        }
+      };
 
-      // Request v3 workflow IDs
-      const versionInput = document.createElement('input');
-      versionInput.type = 'hidden';
-      versionInput.name = 'version';
-      versionInput.value = '3';
-      form.appendChild(versionInput);
+      // Create script tag for JSONP
+      const script = document.createElement('script');
+      script.src = `${this.proxyUrl}?action=config&version=3&callback=${callbackName}`;
 
-      document.body.appendChild(form);
+      script.onerror = () => {
+        if (!completed) {
+          Debug.error('[StackProxy] JSONP config fetch failed');
+          completed = true;
+          cleanup();
+          reject(new Error('Unable to load API configuration. Please refresh and try again.'));
+        }
+      };
 
       const cleanup = () => {
-        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-        if (form.parentNode) form.parentNode.removeChild(form);
+        delete window[callbackName];
+        if (script.parentNode) script.parentNode.removeChild(script);
       };
 
-      // Handle iframe load
-      iframe.onload = () => {
-        if (completed) return;
-
-        setTimeout(() => {
-          if (completed) return;
-
-          try {
-            const doc = iframe.contentDocument || iframe.contentWindow?.document;
-            if (doc && doc.body) {
-              const text = doc.body.innerText || doc.body.textContent;
-              if (text && text.trim()) {
-                const data = JSON.parse(text.trim());
-                if (data.success && data.config) {
-                  completed = true;
-                  cleanup();
-                  resolve(data.config);
-                  return;
-                } else {
-                  throw new Error(data.error || 'Invalid config response');
-                }
-              }
-            }
-          } catch (e) {
-            // If we can't read iframe (cross-origin), reject — proxy is required
-            Debug.error('[StackProxy] Cannot read config from iframe');
-            completed = true;
-            cleanup();
-            reject(new Error('Unable to load API configuration. Please refresh and try again.'));
-          }
-        }, 500);
-      };
-
-      // Timeout — proxy is required, no fallback
+      // Timeout
       setTimeout(() => {
         if (!completed) {
           Debug.error('[StackProxy] Config fetch timeout');
@@ -111,8 +80,7 @@ const StackProxy = {
         }
       }, timeoutMs);
 
-      // Submit form
-      form.submit();
+      document.head.appendChild(script);
     });
   },
 
