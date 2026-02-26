@@ -247,8 +247,9 @@ class AssessmentView {
       return;
     }
     const diff = Math.abs(userScore - aiScore);
-    if (diff >= 2) {
-      deviationEl.querySelector('.deviation-value').textContent = diff;
+    const valueEl = deviationEl.querySelector('.deviation-value');
+    if (diff >= 2 && valueEl) {
+      valueEl.textContent = diff;
       deviationEl.classList.remove('hidden');
     } else {
       deviationEl.classList.add('hidden');
