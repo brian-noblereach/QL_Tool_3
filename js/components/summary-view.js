@@ -136,7 +136,7 @@ class SummaryView {
         } else if (!hasText) {
           submitBtn.textContent = 'Enter recommendation';
         } else {
-          submitBtn.textContent = 'Submit Final Assessment';
+          submitBtn.textContent = Auth.isExternal() ? 'Save Assessment' : 'Submit Final Assessment';
         }
       }
     } else {
@@ -235,6 +235,8 @@ class SummaryView {
    * Force sync all data to the database
    */
   async forceSyncAllData() {
+    if (Auth.isExternal()) return;
+
     const forceSyncBtn = document.getElementById('force-sync-btn');
     const statusContent = document.getElementById('sync-status-content');
 

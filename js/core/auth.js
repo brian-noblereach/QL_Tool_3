@@ -4,7 +4,17 @@
 
 const Auth = {
   STORAGE_KEY: 'noblereach_access_token',
+  ROLE_KEY: 'noblereach_user_role',
   proxyUrl: 'https://script.google.com/macros/s/AKfycbzt7wElvzQv0CNs-icg7QWpxjf4E5FGqWa6KpCY4zSa_thccGNWhw-THLTpnn8GJa2W/exec',
+  role: null,
+
+  /**
+   * Check if current user is in external mode.
+   */
+  isExternal() {
+    if (this.role) return this.role === 'external';
+    return localStorage.getItem(this.ROLE_KEY) === 'external';
+  },
 
   /**
    * Check if user has valid access. Called before app init.
@@ -16,13 +26,24 @@ const Auth = {
 
     try {
       const result = await this.verifyToken(token);
-      if (result.valid) return true;
+      if (result.valid) {
+        // Restore role from verified token
+        if (result.role) {
+          this.role = result.role;
+          localStorage.setItem(this.ROLE_KEY, result.role);
+        }
+        return true;
+      }
 
       // Token invalid — clear it
       localStorage.removeItem(this.STORAGE_KEY);
+      localStorage.removeItem(this.ROLE_KEY);
+      this.role = null;
       return false;
     } catch (e) {
       // Network error — allow access if token exists (offline grace)
+      // Restore role from localStorage
+      this.role = localStorage.getItem(this.ROLE_KEY) || 'internal';
       console.warn('[Auth] Verify failed, allowing cached access:', e.message);
       return true;
     }
@@ -40,6 +61,10 @@ const Auth = {
 
       if (data.success && data.token) {
         localStorage.setItem(this.STORAGE_KEY, data.token);
+        // Store role (internal or external)
+        const role = data.role || 'internal';
+        this.role = role;
+        localStorage.setItem(this.ROLE_KEY, role);
         return { success: true };
       }
 
@@ -63,6 +88,9 @@ const Auth = {
    */
   logout() {
     localStorage.removeItem(this.STORAGE_KEY);
+    localStorage.removeItem(this.ROLE_KEY);
+    this.role = null;
+    document.body.classList.remove('external-mode');
     this.showLoginOverlay();
   },
 

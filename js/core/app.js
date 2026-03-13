@@ -51,14 +51,21 @@ class App {
       this.setupPipelineCallbacks();
       this.setupTabCallbacks();
       
+      // Apply external mode if user logged in with external password
+      if (Auth.isExternal()) {
+        this.applyExternalMode();
+      }
+
       // Check for incomplete analysis
       await this.checkForIncompleteAnalysis();
 
       // Check for first-time user and show welcome modal
       await this.checkForFirstTimeUser();
 
-      // Populate portfolio dropdown from proxy config
-      this.populatePortfolios();
+      // Populate portfolio dropdown from proxy config (internal only)
+      if (!Auth.isExternal()) {
+        this.populatePortfolios();
+      }
 
       // Setup pilot banner
       this.setupPilotBanner();
@@ -427,6 +434,37 @@ class App {
         // history.replaceState(null, '', '#' + data.tabId);
       }
     });
+  }
+
+  /**
+   * Apply external mode restrictions.
+   * Hides Smartsheet features, converts portfolio to text input, relabels advisor field.
+   */
+  applyExternalMode() {
+    document.body.classList.add('external-mode');
+
+    // Rename "Advisor Name" → "Your Name"
+    const advisorLabel = document.querySelector('label[for="sca-name"]');
+    if (advisorLabel) advisorLabel.textContent = 'Your Name';
+    const advisorInput = document.getElementById('sca-name');
+    if (advisorInput) advisorInput.placeholder = 'Your name';
+
+    // Replace portfolio <select> with a text <input> for free-form entry
+    const portfolioSelect = document.getElementById('portfolio');
+    if (portfolioSelect) {
+      const textInput = document.createElement('input');
+      textInput.type = 'text';
+      textInput.id = 'portfolio';
+      textInput.name = 'portfolio';
+      textInput.placeholder = 'e.g., My Program 2026';
+      textInput.className = 'form-input';
+      portfolioSelect.parentNode.replaceChild(textInput, portfolioSelect);
+    }
+
+    // Clear any Smartsheet row ID state
+    window.SmartsheetIntegration?.clearCurrentRowId();
+
+    console.log('[External Mode] Applied external mode restrictions');
   }
 
   async checkForIncompleteAnalysis() {
@@ -1037,6 +1075,10 @@ class App {
    * Submit all scores to Smartsheet on export
    */
   async submitAllScoresToSmartsheet() {
+    if (Auth.isExternal()) {
+      Debug.log('External mode: skipping Smartsheet submission');
+      return;
+    }
     if (!window.SmartsheetIntegration) {
       Debug.warn('SmartsheetIntegration not loaded, skipping submission');
       return;
@@ -1151,6 +1193,15 @@ class App {
    * @param {string} recommendationText - The final recommendation text
    */
   async submitFinalAssessmentWithRecommendation(recommendationText) {
+    if (Auth.isExternal()) {
+      // External mode: save locally only, skip Smartsheet
+      this.stateManager.saveFinalRecommendation(recommendationText);
+      this.toastManager?.success('Assessment saved locally');
+      const exportBtn = document.getElementById('export-btn');
+      if (exportBtn) exportBtn.disabled = false;
+      return { success: true };
+    }
+
     if (!window.SmartsheetIntegration) {
       throw new Error('SmartsheetIntegration not loaded');
     }
@@ -1412,7 +1463,7 @@ class App {
       const assessments = this.stateManager.listPastAssessments();
 
       // Show modal for selection (modal now supports both local and Smartsheet sources)
-      const selected = await this.modalManager.showLoadPreviousModal(assessments);
+      const selected = await this.modalManager.showLoadPreviousModal(assessments, { isExternal: Auth.isExternal() });
 
       if (!selected) {
         // User cancelled

@@ -3360,3 +3360,16 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================
+   EXTERNAL MODE
+   Hide Smartsheet-dependent UI for external users
+   ============================================ */
+
+body.external-mode .database-sync-section {
+  display: none !important;
+}
+
+body.external-mode .smartsheet-section {
+  display: none !important;
+}

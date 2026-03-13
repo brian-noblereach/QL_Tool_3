@@ -395,16 +395,21 @@ class AssessmentView {
    * @param {string} dimension - team, funding, competitive, market, iprisk
    */
   async submitToSmartsheet(dimension) {
+    // External mode: skip Smartsheet, scores are saved locally via state manager
+    if (Auth.isExternal()) {
+      return;
+    }
+
     if (!window.SmartsheetIntegration) {
       console.warn('SmartsheetIntegration not loaded');
       return;
     }
 
     const context = window.SmartsheetIntegration.getContext();
-    
+
     // Get AI score based on dimension
     const aiScore = this.aiScores[dimension];
-    
+
     const scoreData = {
       aiScore: aiScore,
       userScore: this.userScores[dimension].score,

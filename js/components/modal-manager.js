@@ -231,13 +231,14 @@ class ModalManager {
    * @param {Array} assessments - List of cached assessments
    * @returns {Promise<Object|null>} - Selected assessment or null if cancelled
    */
-  showLoadPreviousModal(assessments) {
+  showLoadPreviousModal(assessments, options = {}) {
     return new Promise((resolve) => {
       this.resolvePromise = resolve;
       this.selectedAssessment = null;
       this.selectedAssessmentSource = 'local'; // 'local' or 'smartsheet'
       this._allAssessments = assessments; // local assessments
       this._smartsheetAssessments = []; // populated on search
+      const isExternal = options.isExternal || false;
 
       // Build assessment list HTML
       const listHtml = assessments.length > 0
@@ -255,6 +256,18 @@ class ModalManager {
         `).join('')
         : '<div class="no-assessments-message">No previous assessments found in local cache.</div>';
 
+      // Smartsheet section HTML (hidden for external users)
+      const smartsheetSectionHtml = isExternal ? '' : `
+          <div class="assessment-list-section smartsheet-section">
+            <div class="assessment-list-label">
+              From Smartsheet
+              <button class="btn-link" id="search-smartsheet-btn">Search Smartsheet</button>
+            </div>
+            <div class="assessment-list" id="smartsheet-assessment-list">
+              <div class="no-assessments-message" id="smartsheet-placeholder">Click "Search Smartsheet" to find assessments submitted to Smartsheet.</div>
+            </div>
+          </div>`;
+
       const modalHtml = `
         <div class="modal-header">
           <h3>
@@ -271,20 +284,12 @@ class ModalManager {
             <input type="text" id="assessment-search" class="assessment-search" placeholder="Search by venture name..." autocomplete="off">
           </div>
           <div class="assessment-list-section">
-            <div class="assessment-list-label">Saved Locally (${assessments.length})</div>
+            <div class="assessment-list-label">${isExternal ? 'Previous Assessments' : 'Saved Locally'} (${assessments.length})</div>
             <div class="assessment-list" id="assessment-list">
               ${listHtml}
             </div>
           </div>
-          <div class="assessment-list-section smartsheet-section">
-            <div class="assessment-list-label">
-              From Smartsheet
-              <button class="btn-link" id="search-smartsheet-btn">Search Smartsheet</button>
-            </div>
-            <div class="assessment-list" id="smartsheet-assessment-list">
-              <div class="no-assessments-message" id="smartsheet-placeholder">Click "Search Smartsheet" to find assessments submitted to Smartsheet.</div>
-            </div>
-          </div>
+          ${smartsheetSectionHtml}
         </div>
         <div class="modal-footer">
           <button class="btn outline" data-action="cancel">Cancel</button>
