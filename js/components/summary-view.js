@@ -586,61 +586,86 @@ class SummaryView {
     const clean = (url) => String(url || '')
       .replace(/\[%5E[\d.]+\]$/i, '').replace(/\[\^[\d.]+\]$/i, '')
       .replace(/_*\[%5E[\d.]+\]_*$/i, '').replace(/_*\[\^[\d.]+\]_*$/i, '');
+    const isUrl = (s) => s && typeof s === 'string' && /^https?:\/\//i.test(s.trim());
     const hostname = (url) => {
       try { return new URL(clean(url)).hostname.replace('www.', ''); }
       catch { return clean(url).substring(0, 30); }
     };
 
+    let result = [];
+
     switch (dimension) {
       case 'team':
-        return (f.sources || data?.team?.trusted_sources || [])
-          .filter(u => u && typeof u === 'string')
+        result = (f.sources || data?.team?.trusted_sources || data?.scoring?.sources || [])
+          .filter(isUrl)
           .slice(0, 2)
           .map(url => ({ label: hostname(url), url: clean(url) }));
+        break;
 
       case 'funding': {
-        const deals = (f.verifiedDeals || [])
+        const allDeals = f.verifiedDeals || data?.analysis?.verified_deals?.map(d => ({
+          company: d.startup_name || d.company || 'Deal',
+          series: d.series,
+          sourceUrl: d.source_url || d.sourceUrl
+        })) || [];
+        const deals = allDeals
           .filter(d => d.sourceUrl)
           .slice(0, 2)
           .map(d => ({ label: `${d.company} (${d.series || 'Deal'})`, url: clean(d.sourceUrl) }));
-        const reports = (f.marketReports || [])
+        const allReports = f.marketReports || data?.analysis?.market_reports?.map(r => ({
+          title: r.title,
+          sourceUrl: r.source_url || r.sourceUrl
+        })) || [];
+        const reports = allReports
           .filter(r => r.sourceUrl)
           .slice(0, 1)
           .map(r => ({ label: this.truncate(r.title || 'Market Report', 40), url: clean(r.sourceUrl) }));
-        return [...deals, ...reports].slice(0, 3);
+        result = [...deals, ...reports].slice(0, 3);
+        break;
       }
 
-      case 'competitive':
-        return (f.sources || [])
-          .filter(u => u && typeof u === 'string')
-          .slice(0, 2)
-          .map(url => ({ label: hostname(url), url: clean(url) }));
+      case 'competitive': {
+        // Try formatted sources first, then extract from raw competitor data
+        let urls = (f.sources || []).filter(isUrl);
+        if (urls.length === 0) {
+          const comps = data?.analysis?.competitors || f.competitors || [];
+          urls = [...new Set(comps.flatMap(c => (c.sources || []).filter(isUrl)))];
+        }
+        result = urls.slice(0, 2).map(url => ({ label: hostname(url), url: clean(url) }));
+        break;
+      }
 
-      case 'market':
-        return (f.markets || data?.analysis?.markets || [])
-          .filter(m => m.source || m.source_url)
+      case 'market': {
+        const allMarkets = f.markets || data?.analysis?.markets || data?.scoring?.markets || [];
+        result = allMarkets
+          .filter(m => isUrl(m.source || m.source_url))
           .slice(0, 2)
           .map(m => ({
             label: this.truncate(m.description || 'Market Data', 40),
             url: clean(m.source || m.source_url)
           }));
+        break;
+      }
 
       case 'iprisk': {
-        const patents = f.relevantPatents || data?.data?.top_relevant_patents || [];
-        return patents
+        const patents = f.relevantPatents || data?.data?.top_relevant_patents || data?.analysis?.top_relevant_patents || [];
+        result = patents
           .filter(p => p.link || p.id)
           .slice(0, 3)
           .map(p => {
             let url = clean(p.link || `https://patents.google.com/patent/${p.id}`);
-            // Clean hyphens from patent IDs in Google Patents URLs
             url = url.replace(/(patents\.google\.com\/patent\/)([A-Z0-9-]+)/i,
               (m, pre, id) => pre + id.replace(/-/g, ''));
             return { label: p.id || 'Patent', url };
           });
+        break;
       }
-
-      default: return [];
     }
+
+    if (result.length === 0) {
+      console.debug(`[Summary] No citation sources found for ${dimension}. formatted keys:`, Object.keys(f));
+    }
+    return result;
   }
 
   getScoreClass(score) {

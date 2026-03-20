@@ -2395,11 +2395,11 @@ body {
   border-top: 1px solid var(--slate-100);
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .citation-link {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--nr-teal-1, #0082A5);
   text-decoration: none;
   white-space: nowrap;
@@ -2407,6 +2407,7 @@ body {
   text-overflow: ellipsis;
   display: block;
   text-align: left;
+  padding: 2px 0;
 }
 
 .citation-link:hover {
@@ -2415,8 +2416,9 @@ body {
 }
 
 .citation-num {
-  font-weight: 600;
-  margin-right: 2px;
+  font-weight: 700;
+  margin-right: 3px;
+  color: var(--nr-navy-1, #1D295B);
 }
 
 .summary-actions {
@@ -2744,16 +2746,19 @@ body {
 .competitor-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
 .competitor-header strong,
 .competitor-header .competitor-name { color: var(--nr-navy-1); font-size: 14px; font-weight: 600; display: block; }
-.competitor-badges { display: flex; gap: 4px; }
+.competitor-badges { display: flex; gap: 4px; flex-shrink: 0; }
+.size-badge { font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
 .size-badge.large { background: var(--nr-purple-1); color: white; }
 .size-badge.mid-size { background: var(--nr-teal-1); color: white; }
 .size-badge.startup { background: var(--nr-green-1); color: white; }
-.type-badge { font-size: 10px; padding: 2px 6px; border-radius: 999px; background: var(--slate-300); color: var(--slate-700); }
+.type-badge { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--slate-200); color: var(--slate-600); font-weight: 500; }
+.competitor-product { font-size: 13px; font-weight: 600; color: var(--slate-600); margin-bottom: 4px; }
 .product-name { font-size: 12px; font-weight: 500; color: var(--slate-600); margin-bottom: 4px; }
 .product-desc { font-size: 12px; color: var(--slate-500); line-height: 1.4; margin-bottom: 8px; }
-.competitor-strengths, .competitor-weaknesses { font-size: 11px; color: var(--slate-600); margin-bottom: 4px; }
-.competitor-strengths strong { color: var(--brand-success); }
-.competitor-weaknesses strong { color: var(--brand-warning); }
+.competitor-diff-box { font-size: 12px; font-style: italic; color: var(--slate-700); background: rgba(0, 130, 165, 0.05); border-left: 3px solid var(--nr-teal-1); padding: 6px 10px; margin: 8px 0; line-height: 1.4; }
+.competitor-strengths, .competitor-weaknesses { font-size: 12px; color: var(--slate-600); margin-bottom: 6px; line-height: 1.4; }
+.competitor-strengths .card-label { color: var(--brand-success); display: inline; margin-right: 4px; }
+.competitor-weaknesses .card-label { color: var(--brand-warning); display: inline; margin-right: 4px; }
 .competitor-revenue { font-size: 11px; color: var(--slate-400); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--slate-200); }
 
 /* ---------- Leader Badges ---------- */

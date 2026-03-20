@@ -558,7 +558,7 @@ class AssessmentView {
                 <div class="product-item">
                   <strong>${this.escape(p.name || '')}</strong>
                   ${p.status ? `<span class="status-badge">${this.escape(p.status)}</span>` : ''}
-                  ${p.description ? `<p>${this.escape(this.truncate(p.description, 100))}</p>` : ''}
+                  ${p.description ? `<p title="${this.escape(p.description)}">${this.escape(this.truncate(p.description, 200))}</p>` : ''}
                   ${p.target_customers ? `<p class="target-customers"><em>${this.escape(p.target_customers)}</em></p>` : ''}
                 </div>
               `).join('')}
@@ -1055,30 +1055,9 @@ class AssessmentView {
       </div>
     `;
 
-    // DETAILED VIEW - Score justification breakdown, sector metrics, full deals, data gaps
+    // DETAILED VIEW - Metrics and deals first, then narrative analysis
     const detailedHTML = `
       <div class="evidence-content">
-        <div class="evidence-section">
-          <h4>Score Justification Detail</h4>
-          ${dealVolumeAssessment ? `<div class="landscape-narrative"><h5>Deal Volume</h5><p>${this.escape(dealVolumeAssessment)}</p></div>` : ''}
-          ${stageDistribution ? `<div class="landscape-narrative"><h5>Stage Distribution</h5><p>${this.escape(stageDistribution)}</p></div>` : ''}
-          ${investorQuality ? `<div class="landscape-narrative"><h5>Investor Quality</h5><p>${this.escape(investorQuality)}</p></div>` : ''}
-          ${scaledOutcomes ? `<div class="landscape-narrative"><h5>Scaled Outcomes</h5><p>${this.escape(scaledOutcomes)}</p></div>` : ''}
-          ${trendAssessment ? `<div class="landscape-narrative"><h5>Trend Assessment</h5><p>${this.escape(trendAssessment)}</p></div>` : ''}
-        </div>
-
-        ${sectorEvidence.length > 0 ? `
-          <div class="evidence-section">
-            <h4>Sector Evidence</h4>
-            ${sectorEvidence.map(e => `
-              <div class="landscape-narrative">
-                <h5>${this.capitalize(this.escape(e.evidence_type || '').replace(/_/g, ' '))}</h5>
-                <p>${this.escape(e.description || '')}${e.rubric_implication ? ` <em>${this.escape(e.rubric_implication)}</em>` : ''}</p>
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
-
         <div class="evidence-section">
           <h4>Sector Metrics</h4>
           <div class="metrics-row compact">
@@ -1125,6 +1104,27 @@ class AssessmentView {
                 `).join('')}
               </tbody>
             </table>
+          </div>
+        ` : ''}
+
+        <div class="evidence-section">
+          <h4>Score Justification Detail</h4>
+          ${dealVolumeAssessment ? `<div class="landscape-narrative"><h5>Deal Volume</h5><p>${this.escape(dealVolumeAssessment)}</p></div>` : ''}
+          ${stageDistribution ? `<div class="landscape-narrative"><h5>Stage Distribution</h5><p>${this.escape(stageDistribution)}</p></div>` : ''}
+          ${investorQuality ? `<div class="landscape-narrative"><h5>Investor Quality</h5><p>${this.escape(investorQuality)}</p></div>` : ''}
+          ${scaledOutcomes ? `<div class="landscape-narrative"><h5>Scaled Outcomes</h5><p>${this.escape(scaledOutcomes)}</p></div>` : ''}
+          ${trendAssessment ? `<div class="landscape-narrative"><h5>Trend Assessment</h5><p>${this.escape(trendAssessment)}</p></div>` : ''}
+        </div>
+
+        ${sectorEvidence.length > 0 ? `
+          <div class="evidence-section">
+            <h4>Sector Evidence</h4>
+            ${sectorEvidence.map(e => `
+              <div class="landscape-narrative">
+                <h5>${this.capitalize(this.escape(e.evidence_type || '').replace(/_/g, ' '))}</h5>
+                <p>${this.escape(e.description || '')}${e.rubric_implication ? ` <em>${this.escape(e.rubric_implication)}</em>` : ''}</p>
+              </div>
+            `).join('')}
           </div>
         ` : ''}
 
@@ -1345,31 +1345,34 @@ class AssessmentView {
         <div class="evidence-section">
           <h4>Profiled Competitors (${competitors.length}${estimatedTotal ? ` of ~${this.escape(String(estimatedTotal))} estimated` : ''})</h4>
           <div class="competitor-grid">
-            ${competitors.slice(0, 12).map(c => `
+            ${competitors.slice(0, 12).map(c => {
+              const size = (c.size || c.size_category || c.companySize || '').toLowerCase();
+              const rev = c.revenue && c.revenue.toLowerCase() !== 'unknown' ? c.revenue : null;
+              return `
               <div class="competitor-card-detailed">
                 <div class="competitor-header">
                   <strong class="competitor-name">${this.escape(c.name || c.company_name || 'Unknown Competitor')}</strong>
                   <div class="competitor-badges">
-                    <span class="size-badge ${(c.size || c.size_category || c.companySize || '').toLowerCase()}">${this.escape(c.size || c.size_category || c.companySize || '')}</span>
+                    <span class="size-badge ${size}">${this.escape(c.size || c.size_category || c.companySize || '')}</span>
                     ${c.competitorType ? `<span class="type-badge">${this.escape(c.competitorType)}</span>` : ''}
                   </div>
                 </div>
-                ${c.product ? `<p class="product-name"><strong>${this.escape(c.product)}</strong></p>` : ''}
+                ${c.product ? `<div class="competitor-product">${this.escape(c.product)}</div>` : ''}
                 ${c.description ? `<p class="product-desc">${this.escape(this.truncate(c.description, 150))}</p>` : ''}
+                ${c.differentiation ? `<div class="competitor-diff-box">${this.escape(c.differentiation)}</div>` : ''}
                 ${c.strengths?.length > 0 ? `
                   <div class="competitor-strengths">
-                    <strong>Strengths:</strong> ${c.strengths.slice(0, 2).map(s => this.escape(s)).join('; ')}
+                    <span class="card-label">Strengths</span> ${c.strengths.slice(0, 2).map(s => this.escape(s)).join('; ')}
                   </div>
                 ` : ''}
                 ${c.weaknesses?.length > 0 ? `
                   <div class="competitor-weaknesses">
-                    <strong>Weaknesses:</strong> ${c.weaknesses.slice(0, 2).map(w => this.escape(w)).join('; ')}
+                    <span class="card-label">Weaknesses</span> ${c.weaknesses.slice(0, 2).map(w => this.escape(w)).join('; ')}
                   </div>
                 ` : ''}
-                ${c.differentiation ? `<p class="competitor-diff"><em>${this.escape(c.differentiation)}</em></p>` : ''}
-                ${c.revenue ? `<p class="competitor-revenue">Revenue: ${this.escape(c.revenue)}</p>` : ''}
+                ${rev ? `<p class="competitor-revenue">Revenue: ${this.escape(rev)}</p>` : ''}
               </div>
-            `).join('')}
+            `}).join('')}
           </div>
           ${competitors.length > 12 ? `<p class="more-note">+ ${competitors.length - 12} more competitors</p>` : ''}
         </div>
@@ -2162,8 +2165,8 @@ class AssessmentView {
         h4.classList.add('sv-collapsible-header');
         h4.innerHTML = `<span class="sv-chevron">▾</span> ${h4.innerHTML}`;
         const subsection = h4.parentElement;
-        // Collapse sections after the first 2 by default
-        if (i >= 2) {
+        // Only expand the first section (Problem & Value) by default
+        if (i >= 1) {
           subsection.classList.add('sv-collapsed');
         }
         h4.addEventListener('click', () => {
