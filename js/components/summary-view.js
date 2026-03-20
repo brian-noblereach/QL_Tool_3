@@ -361,7 +361,7 @@ class SummaryView {
       <div class="summary-header">
         <div class="company-summary-info">
           <h3>${this.escape(window.app?.getVentureName() || results.company?.company_overview?.name || 'Unknown Company')}</h3>
-          <p>${this.escape(results.company?.company_overview?.company_description || results.company?.company_overview?.mission_statement || 'No description available.')}</p>
+          <p>${this.escape(results.company?.company_overview?.one_liner || results.company?.company_overview?.detailed_description || results.company?.company_overview?.company_description || 'No description available.')}</p>
         </div>
         <div class="overall-score-display">
           <div class="overall-score-value ${this.getScoreClass(scores.overall)}">${scores.overall}</div>
@@ -392,6 +392,17 @@ class SummaryView {
         </p>
       </div>
     `;
+
+    // Make score cards clickable — navigate to dimension tab
+    container.querySelectorAll('.summary-score-card[data-dimension]').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.citation-link')) return; // Don't intercept citation clicks
+        const dim = card.dataset.dimension;
+        if (dim && dim !== 'solutionvalue' && window.app?.tabManager) {
+          window.app.tabManager.activateTab(dim);
+        }
+      });
+    });
 
     // Show/hide the final recommendation section based on submission status
     this.showRecommendationSection();
@@ -483,22 +494,25 @@ class SummaryView {
   renderScoreCard(label, dimension, data) {
     const isUserOnly = dimension === 'solutionvalue';
 
-    // Check if phase failed (not applicable for user-only dimensions)
+    // Check if phase is pending or failed (not applicable for user-only dimensions)
     if (!data && !isUserOnly) {
+      const isPending = window.app?.state === 'analyzing';
       return `
-        <div class="summary-score-card failed">
+        <div class="summary-score-card ${isPending ? 'pending' : 'failed'}" data-dimension="${dimension}">
           <h4>${label}</h4>
           <div class="score-row">
             <div class="ai-score-display">
               <span class="score-label">AI Score</span>
-              <span class="score-value failed">—</span>
+              <span class="score-value ${isPending ? 'pending' : 'failed'}">${isPending ? '...' : '—'}</span>
             </div>
             <div class="user-score-display">
               <span class="score-label">Your Score</span>
               <span class="score-value">—</span>
             </div>
           </div>
-          <div class="card-status failed">Analysis failed</div>
+          <div class="card-status ${isPending ? 'pending' : 'failed'}">
+            ${isPending ? 'Analysis in progress...' : 'Analysis failed'}
+          </div>
         </div>
       `;
     }
@@ -524,8 +538,20 @@ class SummaryView {
     const userScoreClass = this.getScoreClass(userScore);
     const hasDeviation = !isUserOnly && isSubmitted && aiScore !== null && userScore !== null && Math.abs(aiScore - userScore) >= 2;
 
+    // Extract key sources for citation links
+    const keySources = isUserOnly ? [] : this.extractKeySources(dimension, data);
+    const sourcesHtml = keySources.length > 0 ? `
+      <div class="key-sources">
+        ${keySources.map((s, i) => `
+          <a href="${this.escape(s.url)}" target="_blank" rel="noopener" class="citation-link">
+            <span class="citation-num">[${i + 1}]</span> ${this.escape(s.label)}
+          </a>
+        `).join('')}
+      </div>
+    ` : '';
+
     return `
-      <div class="summary-score-card ${isSubmitted ? 'submitted' : 'pending'}">
+      <div class="summary-score-card ${isSubmitted ? 'submitted' : 'pending'}" data-dimension="${dimension}">
         <h4>${label}</h4>
         <div class="score-row">
           <div class="ai-score-display">
@@ -543,11 +569,78 @@ class SummaryView {
             <strong>Your rationale:</strong> ${this.escape(this.truncate(justification, 100))}
           </div>
         ` : ''}
+        ${sourcesHtml}
         <div class="card-status ${isSubmitted ? 'submitted' : 'pending'}">
           ${isSubmitted ? '✓ Submitted' : 'Not submitted'}
         </div>
       </div>
     `;
+  }
+
+  /**
+   * Extract top 2-3 key sources for a dimension to show as citations in summary cards
+   */
+  extractKeySources(dimension, data) {
+    if (!data) return [];
+    const f = data.formatted || {};
+    const clean = (url) => String(url || '')
+      .replace(/\[%5E[\d.]+\]$/i, '').replace(/\[\^[\d.]+\]$/i, '')
+      .replace(/_*\[%5E[\d.]+\]_*$/i, '').replace(/_*\[\^[\d.]+\]_*$/i, '');
+    const hostname = (url) => {
+      try { return new URL(clean(url)).hostname.replace('www.', ''); }
+      catch { return clean(url).substring(0, 30); }
+    };
+
+    switch (dimension) {
+      case 'team':
+        return (f.sources || data?.team?.trusted_sources || [])
+          .filter(u => u && typeof u === 'string')
+          .slice(0, 2)
+          .map(url => ({ label: hostname(url), url: clean(url) }));
+
+      case 'funding': {
+        const deals = (f.verifiedDeals || [])
+          .filter(d => d.sourceUrl)
+          .slice(0, 2)
+          .map(d => ({ label: `${d.company} (${d.series || 'Deal'})`, url: clean(d.sourceUrl) }));
+        const reports = (f.marketReports || [])
+          .filter(r => r.sourceUrl)
+          .slice(0, 1)
+          .map(r => ({ label: this.truncate(r.title || 'Market Report', 40), url: clean(r.sourceUrl) }));
+        return [...deals, ...reports].slice(0, 3);
+      }
+
+      case 'competitive':
+        return (f.sources || [])
+          .filter(u => u && typeof u === 'string')
+          .slice(0, 2)
+          .map(url => ({ label: hostname(url), url: clean(url) }));
+
+      case 'market':
+        return (f.markets || data?.analysis?.markets || [])
+          .filter(m => m.source || m.source_url)
+          .slice(0, 2)
+          .map(m => ({
+            label: this.truncate(m.description || 'Market Data', 40),
+            url: clean(m.source || m.source_url)
+          }));
+
+      case 'iprisk': {
+        const patents = f.relevantPatents || data?.data?.top_relevant_patents || [];
+        return patents
+          .filter(p => p.link || p.id)
+          .slice(0, 3)
+          .map(p => {
+            let url = clean(p.link || `https://patents.google.com/patent/${p.id}`);
+            // Clean hyphens from patent IDs in Google Patents URLs
+            url = url.replace(/(patents\.google\.com\/patent\/)([A-Z0-9-]+)/i,
+              (m, pre, id) => pre + id.replace(/-/g, ''));
+            return { label: p.id || 'Patent', url };
+          });
+      }
+
+      default: return [];
+    }
   }
 
   getScoreClass(score) {

@@ -385,9 +385,13 @@ class App {
       // Update compact progress
       this.updateCompactProgress();
       
+      // Enable summary tab early (after first non-company phase)
+      if (data.phase !== 'company') {
+        this.tabManager.enableTab('summary');
+      }
+
       // Check if all done
       if (this.tabManager.allReady()) {
-        this.tabManager.enableTab('summary');
         this.updateCompactProgress(true);
       }
     });
@@ -713,6 +717,18 @@ class App {
 
     // Progressively cache after each phase so partial assessments appear in "Load Previous"
     this.cacheCurrentAssessmentProgressively();
+
+    // Progressively update summary tab as each phase completes
+    if (this.assessmentView?.data && this.summaryView) {
+      this.summaryView.update({
+        company: this.assessmentView.data.company,
+        team: this.assessmentView.data.team,
+        funding: this.assessmentView.data.funding,
+        competitive: this.assessmentView.data.competitive,
+        market: this.assessmentView.data.market,
+        iprisk: this.assessmentView.data.iprisk
+      });
+    }
   }
 
   /**
@@ -906,6 +922,19 @@ class App {
     // Update compact progress to show partial completion with warning state
     this.progressView.showCompactPartialComplete(successCount, failedCount);
     
+    // Update summary with partial results
+    this.tabManager.enableTab('summary');
+    if (this.assessmentView?.data && this.summaryView) {
+      this.summaryView.update({
+        company: this.assessmentView.data.company,
+        team: this.assessmentView.data.team,
+        funding: this.assessmentView.data.funding,
+        competitive: this.assessmentView.data.competitive,
+        market: this.assessmentView.data.market,
+        iprisk: this.assessmentView.data.iprisk
+      });
+    }
+
     // Show warning toast
     this.toastManager.warning(
       `Analysis completed with ${failedCount} failed phase(s). You can retry failed phases or export partial results.`

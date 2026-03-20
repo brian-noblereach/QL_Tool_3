@@ -130,6 +130,18 @@ const Auth = {
 
     if (!form) return;
 
+    // Password show/hide toggle
+    const toggleBtn = document.getElementById('auth-toggle-password');
+    if (toggleBtn && input) {
+      toggleBtn.addEventListener('click', () => {
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        toggleBtn.querySelector('.eye-icon').style.display = isPassword ? 'none' : '';
+        toggleBtn.querySelector('.eye-off-icon').style.display = isPassword ? '' : 'none';
+        toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+      });
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 

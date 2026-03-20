@@ -543,11 +543,11 @@ class AssessmentView {
           <p>${this.escape(tech.core_technology || '')}</p>
           ${tech.key_differentiators?.length > 0 ? `
             <div class="innovations-list">
-              <strong>Key Differentiators:</strong>
+              <div class="card-label">Key Differentiators</div>
               <ul>${tech.key_differentiators.slice(0, 3).map(i => `<li>${this.escape(typeof i === 'string' ? i : JSON.stringify(i))}</li>`).join('')}</ul>
             </div>
           ` : ''}
-          ${tech.technology_readiness ? `<p><strong>Readiness:</strong> ${this.escape(tech.technology_readiness)}</p>` : ''}
+          ${tech.technology_readiness ? `<p><span class="card-label">Readiness</span> ${this.escape(tech.technology_readiness)}</p>` : ''}
         </div>
 
         <div class="overview-card">
@@ -564,22 +564,22 @@ class AssessmentView {
               `).join('')}
             </div>
           ` : '<p>No products identified.</p>'}
-          ${products.business_model ? `<p><strong>Business Model:</strong> ${this.escape(products.business_model)}</p>` : ''}
+          ${products.business_model ? `<p><span class="card-label">Business Model</span> ${this.escape(products.business_model)}</p>` : ''}
           ${products.target_industries?.length > 0 ? `
-            <p><strong>Industries:</strong> ${products.target_industries.slice(0, 4).map(i => this.escape(i)).join(', ')}</p>
+            <p><span class="card-label">Industries</span> ${products.target_industries.slice(0, 4).map(i => this.escape(i)).join(', ')}</p>
           ` : ''}
         </div>
 
         <div class="overview-card">
           <h3>Market Context</h3>
-          ${market.target_market ? `<p><strong>Target Market:</strong> ${this.escape(market.target_market)}</p>` : ''}
+          ${market.target_market ? `<p><span class="card-label">Target Market</span> ${this.escape(market.target_market)}</p>` : ''}
           ${market.market_trends?.length > 0 ? `
             <div class="market-trends-list">
-              <strong>Market Trends:</strong>
+              <div class="card-label">Market Trends</div>
               <ul>${market.market_trends.slice(0, 3).map(t => `<li>${this.escape(t)}</li>`).join('')}</ul>
             </div>
           ` : ''}
-          ${market.competitive_positioning ? `<p><strong>Competitive Positioning:</strong> ${this.escape(market.competitive_positioning)}</p>` : ''}
+          ${market.competitive_positioning ? `<p><span class="card-label">Competitive Positioning</span> ${this.escape(market.competitive_positioning)}</p>` : ''}
         </div>
       </div>
 
@@ -2156,6 +2156,20 @@ class AssessmentView {
           ${sections.join('')}
         </div>
       `;
+
+      // Make evidence-subsection headers collapsible
+      container.querySelectorAll('.evidence-subsection > h4').forEach((h4, i) => {
+        h4.classList.add('sv-collapsible-header');
+        h4.innerHTML = `<span class="sv-chevron">▾</span> ${h4.innerHTML}`;
+        const subsection = h4.parentElement;
+        // Collapse sections after the first 2 by default
+        if (i >= 2) {
+          subsection.classList.add('sv-collapsed');
+        }
+        h4.addEventListener('click', () => {
+          subsection.classList.toggle('sv-collapsed');
+        });
+      });
     }
 
     // Update the user score badge if score is submitted
