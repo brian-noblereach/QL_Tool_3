@@ -2784,6 +2784,23 @@ body {
 .competitor-strengths .card-label { color: var(--brand-success); display: inline; margin-right: 4px; }
 .competitor-weaknesses .card-label { color: var(--brand-warning); display: inline; margin-right: 4px; }
 .competitor-revenue { font-size: 11px; color: var(--slate-400); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--slate-200); }
+.competitor-source-link { color: var(--nr-teal-1); text-decoration: none; font-size: 12px; font-weight: 400; margin-left: 4px; }
+.competitor-source-link:hover { text-decoration: underline; }
+
+/* Table source links */
+.table-source-link { color: var(--nr-teal-1); text-decoration: none; font-size: 12px; }
+.table-source-link:hover { text-decoration: underline; }
+
+/* Market basis label */
+.market-basis { font-size: 13px; color: var(--slate-600); margin: 8px 0 4px; }
+
+/* Collapsible sections in summary tabs */
+.collapsible-section { cursor: pointer; }
+.collapsible-section summary { list-style: none; padding: 4px 0; }
+.collapsible-section summary::-webkit-details-marker { display: none; }
+.collapsible-section summary::before { content: '▸ '; font-size: 12px; color: var(--slate-400); }
+.collapsible-section[open] summary::before { content: '▾ '; }
+.collapsible-section summary h4 { margin: 0; }
 
 /* ---------- Leader Badges ---------- */
 .leader-badges { display: flex; flex-wrap: wrap; gap: 6px; }

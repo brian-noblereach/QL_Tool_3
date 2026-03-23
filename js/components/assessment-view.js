@@ -646,7 +646,7 @@ class AssessmentView {
               </div>
             ` : ''}
             ${sources.length > 0 ? `
-              <details open style="margin-top: 4px;">
+              <details style="margin-top: 4px;">
                 <summary style="font-size: 12px; color: var(--slate-500); cursor: pointer;">Sources consulted (${sources.length})</summary>
                 <ul style="margin: 4px 0 0 16px; font-size: 12px; color: var(--slate-500);">
                   ${sources.map(s => `<li>${s.startsWith('http') ? `<a href="${this.escape(s)}" target="_blank" rel="noopener" style="color: var(--nr-teal-1); text-decoration: none;">${this.escape(this.truncate(s, 80))}</a>` : this.escape(s)}</li>`).join('')}
@@ -1026,63 +1026,69 @@ class AssessmentView {
 
         ${marketReports.length > 0 ? `
           <div class="evidence-section">
-            <h4>Market Reports (${marketReports.length})</h4>
-            <div class="market-reports-list">
-              ${marketReports.map(r => `
-                <div class="market-report-item">
-                  <strong>${r.sourceUrl ? `<a href="${this.escape(this.cleanSourceUrl(r.sourceUrl))}" target="_blank" rel="noopener">${this.escape(r.title || 'Report')}</a>` : this.escape(r.title || 'Report')}</strong>
-                  ${r.keyFinding ? `<p>${this.escape(r.keyFinding)}</p>` : ''}
-                </div>
-              `).join('')}
-            </div>
+            <details class="collapsible-section">
+              <summary><h4 style="display:inline;">Market Reports (${marketReports.length})</h4></summary>
+              <div class="market-reports-list">
+                ${marketReports.map(r => `
+                  <div class="market-report-item">
+                    <strong>${r.sourceUrl ? `<a href="${this.escape(this.cleanSourceUrl(r.sourceUrl))}" target="_blank" rel="noopener">${this.escape(r.title || 'Report')}</a>` : this.escape(r.title || 'Report')}</strong>
+                    ${r.keyFinding ? `<p>${this.escape(r.keyFinding)}</p>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </details>
           </div>
         ` : ''}
 
         ${governmentPrograms.length > 0 ? `
           <div class="evidence-section">
-            <h4>Government Programs (${governmentPrograms.length})</h4>
-            <div class="govt-programs-list">
-              ${governmentPrograms.map(g => `
-                <div class="govt-program-item">
-                  <strong>${g.sourceUrl ? `<a href="${this.escape(this.cleanSourceUrl(g.sourceUrl))}" target="_blank" rel="noopener">${this.escape(g.name || 'Program')}</a>` : this.escape(g.name || 'Program')}</strong>
-                  ${g.amount && g.amount !== 'undisclosed' ? ` ${this.formatDealAmount(g.amount)}` : ''}
-                  ${g.description ? `<p>${this.escape(g.description)}</p>` : ''}
-                </div>
-              `).join('')}
-            </div>
+            <details class="collapsible-section">
+              <summary><h4 style="display:inline;">Government Programs (${governmentPrograms.length})</h4></summary>
+              <div class="govt-programs-list">
+                ${governmentPrograms.map(g => `
+                  <div class="govt-program-item">
+                    <strong>${g.sourceUrl ? `<a href="${this.escape(this.cleanSourceUrl(g.sourceUrl))}" target="_blank" rel="noopener">${this.escape(g.name || 'Program')}</a>` : this.escape(g.name || 'Program')}</strong>
+                    ${g.amount && g.amount !== 'undisclosed' ? ` ${this.formatDealAmount(g.amount)}` : ''}
+                    ${g.description ? `<p>${this.escape(g.description)}</p>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </details>
           </div>
         ` : ''}
 
         ${(ventureFundingRounds.length > 0 || ventureGrants.length > 0 || ventureTotalFunding !== 'Unknown') ? `
           <div class="evidence-section venture-context-section">
-            <h4>Venture Funding Context (Reference Only)</h4>
-            <div class="context-notice">
-              <strong>For reference only</strong> -- rate based on sector activity above, not the venture's own funding.
-            </div>
-            ${ventureTotalFunding && ventureTotalFunding !== 'Unknown' ? `<p><strong>Total Funding:</strong> ${this.escape(ventureTotalFunding)}</p>` : ''}
-            ${ventureFundingRounds.length > 0 ? `
-              <div class="funding-timeline">
-                ${ventureFundingRounds.slice(0, 3).map(r => `
-                  <div class="funding-event">
-                    <span class="funding-date">${this.formatDate(r.date)}</span>
-                    <span class="funding-type">${this.escape(r.round_type || '')}</span>
-                    <span class="funding-amount">${this.formatDealAmount(r.amount)}</span>
-                    ${(r.lead_investors || []).length > 0 ? `<span class="funding-investors">${r.lead_investors.slice(0, 2).map(i => this.escape(i)).join(', ')}</span>` : ''}
-                  </div>
-                `).join('')}
-                ${ventureFundingRounds.length > 3 ? `<p class="more-link">+ ${ventureFundingRounds.length - 3} more rounds in detailed view</p>` : ''}
+            <details class="collapsible-section">
+              <summary><h4 style="display:inline;">Venture Funding Context (Reference Only)</h4></summary>
+              <div class="context-notice">
+                <strong>For reference only</strong> -- rate based on sector activity above, not the venture's own funding.
               </div>
-            ` : '<p class="no-data-message">No prior funding rounds identified for this venture.</p>'}
-            ${ventureGrants.length > 0 ? `
-              <h5>Government Grants</h5>
-              <table class="data-table">
-                <thead><tr><th>Type</th><th>Amount</th><th>Agency</th><th>Year</th></tr></thead>
-                <tbody>
-                  ${ventureGrants.map(g => `<tr><td>${this.escape(g.grant_type || '')}</td><td>${this.formatDealAmount(g.amount)}</td><td>${this.escape(g.agency || '')}</td><td>${this.escape(g.year || '')}</td></tr>`).join('')}
-                </tbody>
-              </table>
-            ` : ''}
-            ${ventureNotableInvestors.length > 0 ? `<p><strong>Notable Investors:</strong> ${ventureNotableInvestors.map(i => this.escape(i)).join(', ')}</p>` : ''}
+              ${ventureTotalFunding && ventureTotalFunding !== 'Unknown' ? `<p><strong>Total Funding:</strong> ${this.escape(ventureTotalFunding)}</p>` : ''}
+              ${ventureFundingRounds.length > 0 ? `
+                <div class="funding-timeline">
+                  ${ventureFundingRounds.slice(0, 3).map(r => `
+                    <div class="funding-event">
+                      <span class="funding-date">${this.formatDate(r.date)}</span>
+                      <span class="funding-type">${this.escape(r.round_type || '')}</span>
+                      <span class="funding-amount">${this.formatDealAmount(r.amount)}</span>
+                      ${(r.lead_investors || []).length > 0 ? `<span class="funding-investors">${r.lead_investors.slice(0, 2).map(i => this.escape(i)).join(', ')}</span>` : ''}
+                    </div>
+                  `).join('')}
+                  ${ventureFundingRounds.length > 3 ? `<p class="more-link">+ ${ventureFundingRounds.length - 3} more rounds in detailed view</p>` : ''}
+                </div>
+              ` : '<p class="no-data-message">No prior funding rounds identified for this venture.</p>'}
+              ${ventureGrants.length > 0 ? `
+                <h5>Government Grants</h5>
+                <table class="data-table">
+                  <thead><tr><th>Type</th><th>Amount</th><th>Agency</th><th>Year</th></tr></thead>
+                  <tbody>
+                    ${ventureGrants.map(g => `<tr><td>${this.escape(g.grant_type || '')}</td><td>${this.formatDealAmount(g.amount)}</td><td>${this.escape(g.agency || '')}</td><td>${this.escape(g.year || '')}</td></tr>`).join('')}
+                  </tbody>
+                </table>
+              ` : ''}
+              ${ventureNotableInvestors.length > 0 ? `<p><strong>Notable Investors:</strong> ${ventureNotableInvestors.map(i => this.escape(i)).join(', ')}</p>` : ''}
+            </details>
           </div>
         ` : ''}
       </div>
@@ -1141,25 +1147,27 @@ class AssessmentView {
         ` : ''}
 
         <div class="evidence-section">
-          <h4>Score Justification Detail</h4>
-          ${dealVolumeAssessment ? `<div class="landscape-narrative"><h5>Deal Volume</h5><p>${this.escape(dealVolumeAssessment)}</p></div>` : ''}
-          ${stageDistribution ? `<div class="landscape-narrative"><h5>Stage Distribution</h5><p>${this.escape(stageDistribution)}</p></div>` : ''}
-          ${investorQuality ? `<div class="landscape-narrative"><h5>Investor Quality</h5><p>${this.escape(investorQuality)}</p></div>` : ''}
-          ${scaledOutcomes ? `<div class="landscape-narrative"><h5>Scaled Outcomes</h5><p>${this.escape(scaledOutcomes)}</p></div>` : ''}
-          ${trendAssessment ? `<div class="landscape-narrative"><h5>Trend Assessment</h5><p>${this.escape(trendAssessment)}</p></div>` : ''}
+          <h4>Scoring Analysis</h4>
+          <details open class="collapsible-section">
+            <summary><strong style="font-size: 13px;">Score Justification</strong></summary>
+            ${dealVolumeAssessment ? `<div class="landscape-narrative"><h5>Deal Volume</h5><p>${this.escape(dealVolumeAssessment)}</p></div>` : ''}
+            ${stageDistribution ? `<div class="landscape-narrative"><h5>Stage Distribution</h5><p>${this.escape(stageDistribution)}</p></div>` : ''}
+            ${investorQuality ? `<div class="landscape-narrative"><h5>Investor Quality</h5><p>${this.escape(investorQuality)}</p></div>` : ''}
+            ${scaledOutcomes ? `<div class="landscape-narrative"><h5>Scaled Outcomes</h5><p>${this.escape(scaledOutcomes)}</p></div>` : ''}
+            ${trendAssessment ? `<div class="landscape-narrative"><h5>Trend Assessment</h5><p>${this.escape(trendAssessment)}</p></div>` : ''}
+          </details>
+          ${sectorEvidence.length > 0 ? `
+            <details class="collapsible-section" style="margin-top: 8px;">
+              <summary><strong style="font-size: 13px;">Supporting Evidence (${sectorEvidence.length})</strong></summary>
+              ${sectorEvidence.map(e => `
+                <div class="landscape-narrative">
+                  <h5>${this.capitalize(this.escape(e.evidence_type || '').replace(/_/g, ' '))}</h5>
+                  <p>${this.escape(e.description || '')}${e.rubric_implication ? ` <em>${this.escape(e.rubric_implication)}</em>` : ''}</p>
+                </div>
+              `).join('')}
+            </details>
+          ` : ''}
         </div>
-
-        ${sectorEvidence.length > 0 ? `
-          <div class="evidence-section">
-            <h4>Sector Evidence</h4>
-            ${sectorEvidence.map(e => `
-              <div class="landscape-narrative">
-                <h5>${this.capitalize(this.escape(e.evidence_type || '').replace(/_/g, ' '))}</h5>
-                <p>${this.escape(e.description || '')}${e.rubric_implication ? ` <em>${this.escape(e.rubric_implication)}</em>` : ''}</p>
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
 
         ${dataGaps ? `
           <div class="evidence-section">
@@ -1384,7 +1392,7 @@ class AssessmentView {
               return `
               <div class="competitor-card-detailed">
                 <div class="competitor-header">
-                  <strong class="competitor-name">${this.escape(c.name || c.company_name || 'Unknown Competitor')}</strong>
+                  <strong class="competitor-name">${this.escape(c.name || c.company_name || 'Unknown Competitor')}${(() => { const src = (c.sources || []).find(s => s && typeof s === 'string' && s.startsWith('http')); return src ? ` <a href="${this.escape(src)}" target="_blank" rel="noopener" class="competitor-source-link" title="Source">↗</a>` : ''; })()}</strong>
                   <div class="competitor-badges">
                     <span class="size-badge ${size}">${this.escape(c.size || c.size_category || c.companySize || '')}</span>
                     ${c.competitorType ? `<span class="type-badge">${this.escape(c.competitorType)}</span>` : ''}
@@ -1557,6 +1565,10 @@ class AssessmentView {
           </div>
         </div>
 
+        ${primaryMarket.description ? `
+          <p class="market-basis"><span class="card-label">Based on</span> ${this.escape(primaryMarket.description)}</p>
+        ` : ''}
+
         <div class="evidence-section">
           <h4>AI Assessment Rationale</h4>
           <div class="ai-rationale">${this.formatRationale(justificationSummary)}</div>
@@ -1595,18 +1607,21 @@ class AssessmentView {
                   <th>Market</th>
                   <th>TAM</th>
                   <th>CAGR</th>
+                  <th>Source</th>
                 </tr>
               </thead>
               <tbody>
                 ${markets.map((m, i) => {
                   const mTam = m.tam || m.tam_current_usd;
                   const mCagr = m.cagr || m.cagr_percent;
+                  const mSrc = m.source || m.source_url || '';
                   return `
                     <tr>
                       <td>${m.rank || i + 1}</td>
                       <td>${this.escape(m.description)}</td>
                       <td>${this.formatCurrency(mTam)}</td>
                       <td>${typeof mCagr === 'number' ? mCagr.toFixed(1) + '%' : '-'}</td>
+                      <td>${mSrc && mSrc.startsWith('http') ? `<a href="${this.escape(mSrc)}" target="_blank" rel="noopener" class="table-source-link">${this.escape((() => { try { return new URL(mSrc).hostname.replace('www.',''); } catch { return 'Link'; } })())}</a>` : '—'}</td>
                     </tr>
                   `;
                 }).join('')}
@@ -1859,6 +1874,36 @@ class AssessmentView {
           </div>
         ` : ''}
 
+        ${relevantPatents.length > 0 ? `
+          <div class="evidence-section">
+            <h4>Key Relevant Patents (${relevantPatents.length})</h4>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Patent ID</th>
+                  <th>Title</th>
+                  <th>Assignee</th>
+                  <th>Year</th>
+                  <th>Blocking</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${relevantPatents.map(p => `
+                  <tr>
+                    <td>${p.link ? `<a href="${this.escape(this.cleanPatentLink(p.link))}" target="_blank" rel="noopener">${this.escape(p.id)}</a>` : this.escape(p.id)}</td>
+                    <td>${this.escape(this.truncate(p.title, 50))}</td>
+                    <td>${this.escape(p.assignee)}</td>
+                    <td>${p.year || '-'}</td>
+                    <td><span class="risk-badge risk-${(p.blockingPotential || 'low').toLowerCase()}">${this.capitalize(p.blockingPotential || 'low')}</span></td>
+                    <td>${this.escape(p.status || '')}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : '<div class="evidence-section"><h4>Key Relevant Patents</h4><p>No relevant patents identified.</p></div>'}
+
         ${Object.keys(evaluationSteps).length > 0 ? `
           <div class="evidence-section">
             <h4>Scoring Methodology</h4>
@@ -1889,36 +1934,6 @@ class AssessmentView {
             </div>
           </div>
         ` : ''}
-
-        ${relevantPatents.length > 0 ? `
-          <div class="evidence-section">
-            <h4>Key Relevant Patents (${relevantPatents.length})</h4>
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Patent ID</th>
-                  <th>Title</th>
-                  <th>Assignee</th>
-                  <th>Year</th>
-                  <th>Blocking</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${relevantPatents.map(p => `
-                  <tr>
-                    <td>${p.link ? `<a href="${this.escape(this.cleanPatentLink(p.link))}" target="_blank" rel="noopener">${this.escape(p.id)}</a>` : this.escape(p.id)}</td>
-                    <td>${this.escape(this.truncate(p.title, 50))}</td>
-                    <td>${this.escape(p.assignee)}</td>
-                    <td>${p.year || '-'}</td>
-                    <td><span class="risk-badge risk-${(p.blockingPotential || 'low').toLowerCase()}">${this.capitalize(p.blockingPotential || 'low')}</span></td>
-                    <td>${this.escape(p.status || '')}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        ` : '<div class="evidence-section"><h4>Key Relevant Patents</h4><p>No relevant patents identified.</p></div>'}
 
         ${crowdedFeatures.length > 0 ? `
           <div class="evidence-section">
