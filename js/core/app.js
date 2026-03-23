@@ -240,63 +240,48 @@ class App {
   setupFileUploadListeners() {
     const fileInput = document.getElementById('company-file');
     const uploadZone = document.getElementById('file-upload-zone');
-    const fileInfo = document.getElementById('file-selected-info');
-    const fileName = document.getElementById('file-name');
-    const removeBtn = document.getElementById('file-remove-btn');
-    
+
     if (!fileInput || !uploadZone) return;
-    
-    // Store selected file reference
-    this.selectedFile = null;
-    
-    // File selection via input
+
+    // Store selected files as array
+    this.selectedFiles = [];
+
+    // File selection via input (supports multiple)
     fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        this.handleFileSelection(file);
+      for (const file of e.target.files) {
+        this.addFile(file);
       }
+      // Reset input so the same files can be re-selected if removed
+      fileInput.value = '';
     });
-    
+
     // Drag and drop events
     uploadZone.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.stopPropagation();
       uploadZone.classList.add('drag-over');
     });
-    
+
     uploadZone.addEventListener('dragleave', (e) => {
       e.preventDefault();
       e.stopPropagation();
       uploadZone.classList.remove('drag-over');
     });
-    
+
     uploadZone.addEventListener('drop', (e) => {
       e.preventDefault();
       e.stopPropagation();
       uploadZone.classList.remove('drag-over');
-      
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        this.handleFileSelection(files[0]);
+
+      for (const file of e.dataTransfer.files) {
+        this.addFile(file);
       }
     });
-    
-    // Remove file button
-    if (removeBtn) {
-      removeBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.clearFileSelection();
-      });
-    }
   }
-  
-  handleFileSelection(file) {
+
+  addFile(file) {
     const uploadZone = document.getElementById('file-upload-zone');
-    const fileInfo = document.getElementById('file-selected-info');
-    const fileNameEl = document.getElementById('file-name');
-    const fileInput = document.getElementById('company-file');
-    
+
     // Validate file type
     const validTypes = [
       'application/pdf',
@@ -304,40 +289,91 @@ class App {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ];
     const validExtensions = ['.pdf', '.doc', '.docx'];
-    
+
     const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
     const isValidType = validTypes.includes(file.type) || validExtensions.includes(fileExtension);
-    
+
     if (!isValidType) {
       uploadZone.classList.add('error');
       this.toastManager?.error('Please upload a PDF or Word document');
       setTimeout(() => uploadZone.classList.remove('error'), 3000);
       return;
     }
-    
-    // Store file reference
-    this.selectedFile = file;
-    
-    // Update UI
-    uploadZone.classList.add('has-file');
-    uploadZone.classList.remove('error');
-    fileInfo.classList.remove('hidden');
-    fileNameEl.textContent = file.name;
-    
-    console.log('[App] File selected:', file.name, file.type, file.size);
+
+    // Skip duplicates (same name and size)
+    const isDuplicate = this.selectedFiles.some(f => f.name === file.name && f.size === file.size);
+    if (isDuplicate) return;
+
+    this.selectedFiles.push(file);
+    this.renderFileList();
+
+    console.log('[App] File added:', file.name, file.type, file.size, `(${this.selectedFiles.length} total)`);
   }
-  
+
+  removeFile(index) {
+    this.selectedFiles.splice(index, 1);
+    this.renderFileList();
+    console.log('[App] File removed, remaining:', this.selectedFiles.length);
+  }
+
+  renderFileList() {
+    const uploadZone = document.getElementById('file-upload-zone');
+    const fileList = document.getElementById('file-list');
+    if (!fileList) return;
+
+    if (this.selectedFiles.length === 0) {
+      fileList.innerHTML = '';
+      if (uploadZone) uploadZone.classList.remove('has-file');
+      return;
+    }
+
+    if (uploadZone) {
+      uploadZone.classList.add('has-file');
+      uploadZone.classList.remove('error');
+    }
+
+    fileList.innerHTML = this.selectedFiles.map((file, i) => `
+      <div class="file-list-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <span class="file-list-name">${this.escapeHtml(file.name)}</span>
+        <button type="button" class="file-remove-btn" data-index="${i}" title="Remove file">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    `).join('');
+
+    // Attach remove handlers
+    fileList.querySelectorAll('.file-remove-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.removeFile(parseInt(btn.dataset.index, 10));
+      });
+    });
+  }
+
+  escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
   clearFileSelection() {
     const uploadZone = document.getElementById('file-upload-zone');
-    const fileInfo = document.getElementById('file-selected-info');
+    const fileList = document.getElementById('file-list');
     const fileInput = document.getElementById('company-file');
-    
-    this.selectedFile = null;
-    
+
+    this.selectedFiles = [];
+
     if (fileInput) fileInput.value = '';
     if (uploadZone) uploadZone.classList.remove('has-file', 'error');
-    if (fileInfo) fileInfo.classList.add('hidden');
-    
+    if (fileList) fileList.innerHTML = '';
+
     console.log('[App] File selection cleared');
   }
 
@@ -558,17 +594,17 @@ class App {
     
     const url = urlInput.value.trim();
     const scaName = scaInput?.value.trim() || '';
-    const file = this.selectedFile;
-    
-    // Validate: need either URL or file
+    const files = this.selectedFiles || [];
+
+    // Validate: need either URL or file(s)
     const hasUrl = url.length > 0;
-    const hasFile = file instanceof File;
-    
+    const hasFile = files.length > 0;
+
     if (!hasUrl && !hasFile) {
       this.showValidationError(urlInput, 'Please enter a company website URL or upload a document');
       return;
     }
-    
+
     // Validate URL if provided
     let validatedUrl = null;
     if (hasUrl) {
@@ -579,10 +615,11 @@ class App {
       }
       validatedUrl = validation.url;
     }
-    
+
     // Save input to state (including portfolio for persistence)
     const portfolio = document.getElementById('portfolio')?.value || '';
-    this.stateManager.setCompanyInput(validatedUrl || 'Document Upload', scaName, hasFile ? file.name : null, portfolio);
+    const fileNames = hasFile ? files.map(f => f.name).join(', ') : null;
+    this.stateManager.setCompanyInput(validatedUrl || 'Document Upload', scaName, fileNames, portfolio);
 
     // Clear Smartsheet row ID for new analysis - each new analysis should create a new row
     // This prevents trying to update a row from a previous analysis
@@ -592,32 +629,32 @@ class App {
     // Clear custom venture name for new analysis - AI will generate a new name
     this.stateManager.saveCustomVentureName(null);
     // Show cleaned filename as initial name for file uploads, or "Loading..." for URL-only
-    const initialName = file ? file.name.replace(/\.[^/.]+$/, '') : 'Loading...';
+    const initialName = hasFile ? files[0].name.replace(/\.[^/.]+$/, '') : 'Loading...';
     this.setVentureNameDisplay(initialName);
 
     // Clear final recommendation for new analysis
     this.stateManager.saveFinalRecommendation('');
     const recTextarea = document.getElementById('final-recommendation-text');
     if (recTextarea) recTextarea.value = '';
-    
+
     // Request notification permission
     await this.requestNotificationPermission();
-    
+
     try {
       // Show progress section
       this.showSection('progress');
-      
+
       // Update progress message based on input type
       let progressMessage = 'Analyzing: ';
       if (hasUrl && hasFile) {
-        progressMessage += validatedUrl + ' + ' + file.name;
+        progressMessage += validatedUrl + ' + ' + files.length + ' file' + (files.length > 1 ? 's' : '');
       } else if (hasFile) {
-        progressMessage += file.name;
+        progressMessage += files.length === 1 ? files[0].name : files.length + ' files';
       } else {
         progressMessage += validatedUrl;
       }
       document.getElementById('progress-company-name').textContent = progressMessage;
-      
+
       // Reset assessment state (clears old scores, justifications, submitted flags)
       this.assessmentView.reset();
 
@@ -626,9 +663,9 @@ class App {
 
       // Start progress tracking
       this.progressView.start(this.pipeline);
-      
-      // Run analysis with URL and/or file
-      await this.pipeline.start({ url: validatedUrl, file: file });
+
+      // Run analysis with URL and/or files
+      await this.pipeline.start({ url: validatedUrl, files: files });
       
     } catch (error) {
       console.error('Analysis failed:', error);

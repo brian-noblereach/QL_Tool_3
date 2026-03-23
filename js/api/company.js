@@ -10,18 +10,22 @@ const CompanyAPI = {
   },
 
   /**
-   * Analyze a company using URL, file, or both
-   * 
+   * Analyze a company using URL, file(s), or both
+   *
    * @param {Object} options - Input options
    * @param {string} options.url - Company website URL (optional)
-   * @param {File} options.file - Uploaded document (optional)
+   * @param {File} options.file - Single uploaded document (backward compat, optional)
+   * @param {File[]} options.files - Array of uploaded documents (optional)
    * @returns {Promise<Object>} - { full: {...}, short: "..." }
    */
-  async analyze({ url, file } = {}, abortSignal = null) {
+  async analyze({ url, file, files } = {}, abortSignal = null) {
+    // Support both single file and files array (backward compat)
+    const fileArray = files || (file ? [file] : []);
+
     // Validate inputs - need at least one
     const hasUrl = url && typeof url === 'string' && url.trim().length > 0;
-    const hasFile = file && file instanceof File;
-    
+    const hasFile = fileArray.length > 0;
+
     if (!hasUrl && !hasFile) {
       throw new Error('Either a company URL or document is required');
     }
@@ -36,23 +40,23 @@ const CompanyAPI = {
       workflow = 'company_url';
     }
 
-    Debug.log(`[CompanyAPI] Using workflow: ${workflow}`);
+    Debug.log(`[CompanyAPI] Using workflow: ${workflow}, files: ${fileArray.length}`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-    
+
     if (abortSignal) {
       abortSignal.addEventListener('abort', () => controller.abort());
     }
 
     try {
       let data;
-      
+
       if (hasFile) {
-        // Use file upload method
-        data = await window.StackProxy.callWithFile(
+        // Use file upload method (supports multiple files)
+        data = await window.StackProxy.callWithFiles(
           workflow,
-          file,
+          fileArray,
           hasUrl ? url.trim() : null,
           controller.signal
         );

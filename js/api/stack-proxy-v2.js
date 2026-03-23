@@ -138,46 +138,59 @@ const StackProxy = {
   },
   
   /**
-   * Upload file via proxy, then call workflow directly
-   * Uses iframe form submission to avoid CORS issues with Google Apps Script
+   * Upload a single file via proxy, then call workflow directly (backward compat)
    */
   async callWithFile(workflow, file, websiteUrl = null, abortSignal = null) {
+    return this.callWithFiles(workflow, [file], websiteUrl, abortSignal);
+  },
+
+  /**
+   * Upload multiple files via proxy, then call workflow directly
+   * Files are uploaded sequentially to the same doc-0 node
+   * First upload clears existing files; subsequent uploads append
+   */
+  async callWithFiles(workflow, files, websiteUrl = null, abortSignal = null) {
     const config = await this.init();
-
-    Debug.log(`[StackProxy] Uploading file for ${workflow}`);
-
-    // Step 1: Upload file via proxy (needs private key)
-    const fileBase64 = await this.fileToBase64(file);
     const userId = this.getUserId();
 
-    const uploadData = {
-      action: 'upload_file',
-      workflow: workflow,
-      userId: userId,
-      fileName: file.name,
-      fileBase64: fileBase64,
-      mimeType: file.type || this.getMimeType(file.name),
-      version: '3'
-    };
+    Debug.log(`[StackProxy] Uploading ${files.length} file(s) for ${workflow}`);
 
-    Debug.log(`[StackProxy] Uploading file via iframe, size: ${file.size} bytes`);
+    // Upload files sequentially
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileBase64 = await this.fileToBase64(file);
 
-    // Upload via iframe form submission to avoid CORS
-    const uploadResult = await this.postViaIframe(uploadData);
+      const uploadData = {
+        action: 'upload_file',
+        workflow: workflow,
+        userId: userId,
+        fileName: file.name,
+        fileBase64: fileBase64,
+        mimeType: file.type || this.getMimeType(file.name),
+        version: '3',
+        clearFirst: i === 0  // Only clear existing files on first upload
+      };
 
-    if (!uploadResult.success) {
-      throw new Error('File upload failed: ' + (uploadResult.error || 'Unknown error'));
+      Debug.log(`[StackProxy] Uploading file ${i + 1}/${files.length}: ${file.name} (${file.size} bytes)${i === 0 ? ' [clearing existing]' : ' [appending]'}`);
+
+      const uploadResult = await this.postViaIframe(uploadData);
+
+      if (!uploadResult.success) {
+        throw new Error(`Upload failed for ${file.name}: ${uploadResult.error || 'Unknown error'}`);
+      }
+
+      Debug.log(`[StackProxy] File ${i + 1}/${files.length} uploaded successfully`);
     }
 
-    Debug.log(`[StackProxy] File uploaded, calling workflow...`);
-
-    // Step 2: Wait a moment for file to be processed
+    // Wait for files to be processed
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Step 3: Call the workflow directly (no proxy needed)
+    Debug.log(`[StackProxy] All files uploaded, calling workflow...`);
+
+    // Call the workflow directly (no proxy needed)
     const payload = {
       user_id: userId,
-      'doc-0': null  // Indicates uploaded document exists
+      'doc-0': null  // Indicates uploaded documents exist
     };
 
     // Add website URL if this is the "both" workflow

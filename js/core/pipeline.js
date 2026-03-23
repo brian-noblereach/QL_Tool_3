@@ -69,7 +69,7 @@ class AnalysisPipeline {
     this.startTime = null;
     this.abortController = null;
     this.companyUrl = null;
-    this.companyFile = null;
+    this.companyFiles = [];
     this.companyDescription = null;  // Short description for other APIs
     this.callbacks = {};
     this.isRunning = false;
@@ -111,15 +111,18 @@ class AnalysisPipeline {
    * @param {string} options.url - Company website URL (optional)
    * @param {File} options.file - Uploaded document (optional)
    */
-  async start({ url, file } = {}) {
+  async start({ url, file, files } = {}) {
     if (this.isRunning) {
       throw new Error('Analysis already in progress');
     }
 
+    // Support both single file and files array (backward compat)
+    const fileArray = files || (file ? [file] : []);
+
     // Validate inputs - need at least one
     const hasUrl = url && typeof url === 'string' && url.trim().length > 0;
-    const hasFile = file && file instanceof File;
-    
+    const hasFile = fileArray.length > 0;
+
     if (!hasUrl && !hasFile) {
       throw new Error('Either a company URL or document is required');
     }
@@ -135,13 +138,13 @@ class AnalysisPipeline {
       this.companyUrl = null;
     }
 
-    this.companyFile = hasFile ? file : null;
+    this.companyFiles = hasFile ? fileArray : [];
     this.companyDescription = null;
     this.startTime = Date.now();
     this.abortController = new AbortController();
     this.isRunning = true;
     this.activePhases.clear();
-    
+
     this.phases.forEach(phase => {
       phase.status = 'pending';
       phase.startTime = null;
@@ -151,10 +154,10 @@ class AnalysisPipeline {
       delete phase.promise;
     });
 
-    this.emit('start', { 
-      url: this.companyUrl, 
+    this.emit('start', {
+      url: this.companyUrl,
       hasFile: hasFile,
-      fileName: hasFile ? file.name : null 
+      fileName: hasFile ? fileArray.map(f => f.name).join(', ') : null
     });
 
     try {
@@ -343,7 +346,7 @@ class AnalysisPipeline {
    */
   async runCompanyAnalysis() {
     const response = await CompanyAPI.analyze(
-      { url: this.companyUrl, file: this.companyFile },
+      { url: this.companyUrl, files: this.companyFiles },
       this.abortController.signal
     );
     
@@ -584,11 +587,11 @@ class AnalysisPipeline {
     this.startTime = null;
     this.abortController = null;
     this.companyUrl = null;
-    this.companyFile = null;
+    this.companyFiles = [];
     this.companyDescription = null;
     this.isRunning = false;
     this.activePhases.clear();
-    
+
     this.phases.forEach(phase => {
       phase.status = 'pending';
       phase.startTime = null;

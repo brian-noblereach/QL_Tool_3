@@ -2981,32 +2981,41 @@ body {
   color: var(--slate-400);
 }
 
-.file-selected-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background: white;
-  border: 1px solid var(--nr-teal-1);
-  border-radius: var(--radius-sm);
-  position: relative;
-  z-index: 3;
-}
-
-.file-selected-info.hidden {
-  display: none;
-}
-
 .file-upload-zone.has-file .file-upload-content {
   display: none;
 }
 
-.file-icon {
+/* Multi-file list */
+.file-list {
+  position: relative;
+  z-index: 3;
+}
+
+.file-list:empty + .file-upload-content {
+  display: flex;
+}
+
+.file-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-sm);
+  margin-top: 4px;
+}
+
+.file-list-item:first-child {
+  margin-top: 0;
+}
+
+.file-list-item svg {
   color: var(--nr-teal-1);
   flex-shrink: 0;
 }
 
-.file-name {
+.file-list-name {
   flex: 1;
   font-size: 13px;
   font-weight: 500;
