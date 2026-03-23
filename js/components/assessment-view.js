@@ -521,6 +521,8 @@ class AssessmentView {
     const tech = data.technology || {};
     const products = data.products_services || {};
     const market = data.market_context || {};
+    const founders = (data.team?.founders || []).slice(0, 3);
+    const news = (data.recent_activity?.news_and_events || []).filter(n => n.source_url && n.headline).slice(0, 2);
 
     // Build products list from products_services.products[]
     const productsList = (products.products || []).slice(0, 3);
@@ -532,10 +534,29 @@ class AssessmentView {
           <h4>${this.escape(overview.name || 'Unknown Company')}</h4>
           <p>${this.escape(overview.one_liner || overview.detailed_description || '')}</p>
           <div class="overview-meta">
-            ${overview.website ? `<span class="meta-item"><span class="meta-icon">🌐</span>${this.displayUrl(overview.website)}</span>` : ''}
+            ${overview.website && overview.website !== 'Not available' ? `<span class="meta-item"><span class="meta-icon">🌐</span><a href="${this.escape(this.cleanSourceUrl(overview.website))}" target="_blank" rel="noopener" class="overview-link">${this.displayUrl(overview.website)}</a></span>` : ''}
             ${overview.founded_year ? `<span class="meta-item"><span class="meta-icon">📅</span>Founded ${overview.founded_year}</span>` : ''}
             ${overview.company_stage ? `<span class="meta-item"><span class="meta-icon">📊</span>${this.escape(overview.company_stage)}</span>` : ''}
           </div>
+          ${founders.length > 0 ? `
+            <div class="founder-links">
+              ${founders.map(f => `
+                <span class="founder-item">
+                  ${this.escape(f.name || '')}${f.title ? `, ${this.escape(f.title)}` : ''}${f.linkedin_url ? ` <a href="${this.escape(f.linkedin_url)}" target="_blank" rel="noopener" class="linkedin-icon" title="LinkedIn profile">in</a>` : ''}
+                </span>
+              `).join('')}
+            </div>
+          ` : ''}
+          ${news.length > 0 ? `
+            <div class="recent-news">
+              <div class="card-label">Recent News</div>
+              ${news.map(n => `
+                <a href="${this.escape(n.source_url)}" target="_blank" rel="noopener" class="news-link">
+                  ${this.escape(this.truncate(n.headline, 80))}${n.date ? ` <span class="news-date">${this.escape(n.date)}</span>` : ''}
+                </a>
+              `).join('')}
+            </div>
+          ` : ''}
         </div>
 
         <div class="overview-card">
@@ -548,6 +569,18 @@ class AssessmentView {
             </div>
           ` : ''}
           ${tech.technology_readiness ? `<p><span class="card-label">Readiness</span> ${this.escape(tech.technology_readiness)}</p>` : ''}
+          ${tech.patents?.length > 0 ? `
+            <div class="patent-links">
+              <div class="card-label">Patents</div>
+              ${tech.patents.slice(0, 3).map(p => {
+                const patNum = p.patent_number || '';
+                const patUrl = `https://patents.google.com/patent/${patNum.replace(/-/g, '')}`;
+                return `<a href="${this.escape(patUrl)}" target="_blank" rel="noopener" class="patent-link">
+                  ${this.escape(patNum)}${p.status ? ` <span class="patent-status ${p.status}">${this.escape(p.status)}</span>` : ''}
+                </a>`;
+              }).join('')}
+            </div>
+          ` : ''}
         </div>
 
         <div class="overview-card">
@@ -613,10 +646,10 @@ class AssessmentView {
               </div>
             ` : ''}
             ${sources.length > 0 ? `
-              <details style="margin-top: 4px;">
+              <details open style="margin-top: 4px;">
                 <summary style="font-size: 12px; color: var(--slate-500); cursor: pointer;">Sources consulted (${sources.length})</summary>
-                <ul style="margin: 4px 0 0 16px; font-size: 11px; color: var(--slate-500);">
-                  ${sources.map(s => `<li>${s.startsWith('http') ? `<a href="${this.escape(s)}" target="_blank" rel="noopener">${this.escape(this.truncate(s, 60))}</a>` : this.escape(s)}</li>`).join('')}
+                <ul style="margin: 4px 0 0 16px; font-size: 12px; color: var(--slate-500);">
+                  ${sources.map(s => `<li>${s.startsWith('http') ? `<a href="${this.escape(s)}" target="_blank" rel="noopener" style="color: var(--nr-teal-1); text-decoration: none;">${this.escape(this.truncate(s, 80))}</a>` : this.escape(s)}</li>`).join('')}
                 </ul>
               </details>
             ` : ''}
