@@ -1110,7 +1110,12 @@ class App {
     if (Notification.permission === "granted") return true;
     if (Notification.permission !== "denied") {
       try {
-        const permission = await Notification.requestPermission();
+        // Race against a timeout — Edge may suppress the permission prompt entirely,
+        // causing requestPermission() to hang forever and blocking analysis.
+        const permission = await Promise.race([
+          Notification.requestPermission(),
+          new Promise(resolve => setTimeout(() => resolve("timeout"), 3000))
+        ]);
         return permission === "granted";
       } catch (e) {
         return false;
