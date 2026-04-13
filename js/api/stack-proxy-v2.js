@@ -198,7 +198,34 @@ const StackProxy = {
       payload['in-0'] = websiteUrl;
     }
 
-    return this.call(workflow, payload, abortSignal);
+    try {
+      return await this.call(workflow, payload, abortSignal);
+    } finally {
+      // Delete the uploaded file(s) from Stack AI's document store immediately,
+      // whether the workflow succeeded, errored, or was aborted. Downstream
+      // phases use downstream_summary text only, not the file. Fire-and-forget
+      // so cleanup runs in parallel with response processing in CompanyAPI.
+      this.clearFiles(workflow, userId);
+    }
+  },
+
+  /**
+   * Delete uploaded files from Stack AI's document store for a given
+   * workflow + user. Best-effort: errors are logged but never thrown,
+   * so a failed cleanup does not break the user-facing analysis flow.
+   */
+  async clearFiles(workflow, userId) {
+    try {
+      const result = await this.postViaIframe({
+        action: 'clear_files',
+        workflow: workflow,
+        userId: userId,
+        version: '3'
+      });
+      Debug.log(`[StackProxy] Cleared ${result.cleared || 0} file(s) for ${workflow}`);
+    } catch (err) {
+      Debug.warn(`[StackProxy] clearFiles failed (non-fatal):`, err.message);
+    }
   },
 
   /**
