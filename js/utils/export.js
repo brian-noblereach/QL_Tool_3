@@ -254,6 +254,12 @@ const ExportUtility = {
         this.addFinalRecommendation(doc, data);
       }
 
+      // Add venture-level advisor decisions if any are set
+      if (this.hasVentureDecisions(data.ventureDecisions)) {
+        PdfLayout.addPage(doc);
+        this.addVentureLevelDecisions(doc, data);
+      }
+
       // Add appendix with full data
       PdfLayout.addPage(doc);
       this.addAppendixCover(doc);
@@ -1412,6 +1418,89 @@ const ExportUtility = {
       y,
       { maxWidth: contentWidth }
     );
+  },
+
+  /**
+   * Whether any Venture-Level Advisor Decisions are set.
+   */
+  hasVentureDecisions(vd) {
+    if (!vd) return false;
+    return (
+      (vd.trackAssignment === 1 || vd.trackAssignment === 2 || vd.trackAssignment === 3) ||
+      (vd.pathway === 'license' || vd.pathway === 'company' || vd.pathway === 'both') ||
+      !!vd.dualUse ||
+      (typeof vd.ecosystemNotes === 'string' && vd.ecosystemNotes.trim().length > 0)
+    );
+  },
+
+  /**
+   * Render Venture-Level Advisor Decisions page: Track, Pathway, Dual-use, Local Ecosystem notes.
+   */
+  addVentureLevelDecisions(doc, data) {
+    const pageWidth = doc.internal.pageSize.width;
+    const contentWidth = pageWidth - PdfLayout.marginLeft - PdfLayout.marginRight;
+    const vd = data.ventureDecisions || {};
+    let y = 30;
+
+    PdfTypography.sectionTitle(doc);
+    doc.text('Venture-Level Advisor Decisions', PdfLayout.marginLeft, y);
+    y += 15;
+
+    const trackLabels = {
+      1: 'Track 1 — Research Translation',
+      2: 'Track 2 — Startup Formation',
+      3: 'Track 3 — Startup Development'
+    };
+    const pathwayLabels = {
+      license: 'License opportunity',
+      company: 'Company formation',
+      both: 'Both viable'
+    };
+
+    const writeLabelValue = (label, value) => {
+      PdfTypography.body(doc, 'bold');
+      doc.text(label, PdfLayout.marginLeft, y);
+      PdfTypography.body(doc);
+      y = PdfLayout.drawText(
+        doc,
+        value,
+        PdfLayout.marginLeft + 50,
+        y,
+        { maxWidth: contentWidth - 50 }
+      );
+      y += 4;
+    };
+
+    // Track
+    if (vd.trackAssignment === 1 || vd.trackAssignment === 2 || vd.trackAssignment === 3) {
+      writeLabelValue('Track:', trackLabels[vd.trackAssignment]);
+    }
+
+    // Pathway
+    if (vd.pathway && pathwayLabels[vd.pathway]) {
+      writeLabelValue('Pathway:', pathwayLabels[vd.pathway]);
+    }
+
+    // Dual-use — only shown when true (absence means "no" or undecided)
+    if (vd.dualUse) {
+      writeLabelValue('Dual-use:', 'Yes');
+    }
+
+    // Local Ecosystem Activation
+    if (typeof vd.ecosystemNotes === 'string' && vd.ecosystemNotes.trim().length > 0) {
+      y += 4;
+      PdfTypography.heading(doc);
+      doc.text('Local Ecosystem Activation', PdfLayout.marginLeft, y);
+      y += 8;
+      PdfTypography.body(doc);
+      y = PdfLayout.drawText(
+        doc,
+        vd.ecosystemNotes,
+        PdfLayout.marginLeft,
+        y,
+        { maxWidth: contentWidth }
+      );
+    }
   },
 
   /**

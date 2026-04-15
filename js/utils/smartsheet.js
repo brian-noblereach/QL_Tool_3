@@ -440,6 +440,20 @@ const SmartsheetIntegration = {
       payload.finalRecommendation = context.finalRecommendation;
     }
 
+    // Venture-Level Advisor Decisions (sent whenever present in context)
+    if (context.ecosystemNotes !== undefined && context.ecosystemNotes !== null) {
+      payload.ecosystemNotes = context.ecosystemNotes;
+    }
+    if (context.trackAssignment !== undefined && context.trackAssignment !== null) {
+      payload.trackAssignment = context.trackAssignment;
+    }
+    if (context.pathway !== undefined && context.pathway !== null) {
+      payload.pathway = context.pathway;
+    }
+    if (context.dualUse !== undefined) {
+      payload.dualUse = !!context.dualUse;
+    }
+
     return payload;
   },
 
@@ -479,11 +493,17 @@ const SmartsheetIntegration = {
    * Get context from current app state
    */
   getContext() {
+    const sm = window.app?.stateManager;
     return {
       ventureName: this.getVentureName(),
       ventureUrl: this.getVentureUrl(),
       advisorName: this.getAdvisorName(),
-      portfolio: this.getPortfolio()
+      portfolio: this.getPortfolio(),
+      // Venture-Level Advisor Decisions (pulled from StateManager)
+      ecosystemNotes:   sm ? sm.getEcosystemNotes()   : '',
+      trackAssignment:  sm ? sm.getTrackAssignment()  : null,
+      pathway:          sm ? sm.getPathway()          : null,
+      dualUse:          sm ? sm.getDualUse()          : false
     };
   },
 

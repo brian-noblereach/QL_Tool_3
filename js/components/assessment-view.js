@@ -2242,8 +2242,15 @@ class AssessmentView {
       };
     };
 
-    // Get final recommendation from state manager
-    const finalRecommendation = window.app?.stateManager?.getFinalRecommendation() || '';
+    // Get final recommendation and venture-level decisions from state manager
+    const sm = window.app?.stateManager;
+    const finalRecommendation = sm?.getFinalRecommendation() || '';
+    const ventureDecisions = sm ? {
+      trackAssignment: sm.getTrackAssignment(),
+      pathway:         sm.getPathway(),
+      dualUse:         sm.getDualUse(),
+      ecosystemNotes:  sm.getEcosystemNotes()
+    } : null;
 
     return {
       company: this.data.company,
@@ -2253,7 +2260,8 @@ class AssessmentView {
       market: getDimensionExport('market'),
       iprisk: getDimensionExport('iprisk'),
       solutionvalue: getDimensionExport('solutionvalue'),
-      finalRecommendation: finalRecommendation || null
+      finalRecommendation: finalRecommendation || null,
+      ventureDecisions
     };
   }
 

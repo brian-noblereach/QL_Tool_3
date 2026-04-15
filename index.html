@@ -772,6 +772,60 @@
             <!-- Populated by JavaScript -->
           </div>
 
+          <!-- Venture-Level Decisions -->
+          <section id="venture-decisions-section" class="venture-decisions-card">
+            <div class="recommendation-header">
+              <h3>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Venture-Level Decisions
+              </h3>
+              <p class="recommendation-hint">Optional advisor judgments that apply to the venture as a whole.</p>
+            </div>
+
+            <!-- Track Assignment -->
+            <div class="form-group">
+              <label>Track Assignment</label>
+              <div class="radio-row" role="radiogroup" aria-label="Track Assignment">
+                <label class="radio-option"><input type="radio" name="venture-track" value="1"> Track 1 &mdash; Research Translation</label>
+                <label class="radio-option"><input type="radio" name="venture-track" value="2"> Track 2 &mdash; Startup Formation</label>
+                <label class="radio-option"><input type="radio" name="venture-track" value="3"> Track 3 &mdash; Startup Development</label>
+              </div>
+              <p class="input-hint">Which S2V stage best fits this venture today?</p>
+            </div>
+
+            <!-- Pathway -->
+            <div class="form-group">
+              <label>Best Pathway</label>
+              <div class="radio-row" role="radiogroup" aria-label="Best Pathway">
+                <label class="radio-option"><input type="radio" name="venture-pathway" value="license"> License opportunity</label>
+                <label class="radio-option"><input type="radio" name="venture-pathway" value="company"> Company formation</label>
+                <label class="radio-option"><input type="radio" name="venture-pathway" value="both"> Both viable</label>
+              </div>
+            </div>
+
+            <!-- Dual-use -->
+            <div class="form-group">
+              <label class="checkbox-inline">
+                <input type="checkbox" id="venture-dual-use"> Dual-use venture
+              </label>
+              <p class="input-hint">Check if the venture has both commercial and government/defense applications.</p>
+            </div>
+
+            <!-- Local Ecosystem Activation -->
+            <div class="form-group">
+              <label for="venture-ecosystem-notes">Local Ecosystem Activation</label>
+              <textarea
+                id="venture-ecosystem-notes"
+                rows="5"
+                placeholder="Which local/regional government institutions, industry companies, accelerators, universities, or other ecosystem actors should be connected to this technology to activate the venture's local ecosystem?"
+                maxlength="4000"
+              ></textarea>
+              <p class="input-hint">Focus on the venture's <em>local</em> ecosystem &mdash; nearby partners, regional programs, state/local government, and area accelerators. Name specific organizations where possible.</p>
+            </div>
+          </section>
+
           <!-- Final Recommendation Section -->
           <div id="final-recommendation-section" class="final-recommendation hidden">
             <div class="recommendation-header">

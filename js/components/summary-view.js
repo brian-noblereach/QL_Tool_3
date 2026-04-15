@@ -10,7 +10,108 @@ class SummaryView {
   init() {
     Debug.log('SummaryView initialized');
     this.setupFinalRecommendation();
+    this.setupVentureDecisions();
     this.setupDatabaseSync();
+  }
+
+  /**
+   * Wire up the Venture-Level Decisions card (Track, Pathway, Dual-use, Ecosystem notes).
+   * Each control reads from StateManager on load and auto-saves on change.
+   */
+  setupVentureDecisions() {
+    const sm = window.app?.stateManager;
+    if (!sm) return;
+
+    // Track Assignment (radios)
+    const trackRadios = document.querySelectorAll('input[name="venture-track"]');
+    const currentTrack = sm.getTrackAssignment();
+    trackRadios.forEach(r => {
+      if (parseInt(r.value, 10) === currentTrack) r.checked = true;
+      r.addEventListener('change', () => {
+        if (r.checked) sm.saveTrackAssignment(parseInt(r.value, 10));
+      });
+    });
+
+    // Pathway (radios)
+    const pathwayRadios = document.querySelectorAll('input[name="venture-pathway"]');
+    const currentPathway = sm.getPathway();
+    pathwayRadios.forEach(r => {
+      if (r.value === currentPathway) r.checked = true;
+      r.addEventListener('change', () => {
+        if (r.checked) sm.savePathway(r.value);
+      });
+    });
+
+    // Dual-use checkbox
+    const dualUse = document.getElementById('venture-dual-use');
+    if (dualUse) {
+      dualUse.checked = sm.getDualUse();
+      dualUse.addEventListener('change', () => sm.saveDualUse(dualUse.checked));
+    }
+
+    // Local Ecosystem Activation notes (debounced save)
+    const notes = document.getElementById('venture-ecosystem-notes');
+    if (notes) {
+      notes.value = sm.getEcosystemNotes();
+      let timer = null;
+      notes.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => sm.saveEcosystemNotes(notes.value), 300);
+      });
+    }
+  }
+
+  /**
+   * Read current Venture-Level Decisions from state for submission payload.
+   * @returns {{trackAssignment: (1|2|3|null), pathway: ('license'|'company'|'both'|null), dualUse: boolean, ecosystemNotes: string}}
+   */
+  getVentureDecisions() {
+    const sm = window.app?.stateManager;
+    if (!sm) {
+      return { trackAssignment: null, pathway: null, dualUse: false, ecosystemNotes: '' };
+    }
+    return {
+      trackAssignment: sm.getTrackAssignment(),
+      pathway: sm.getPathway(),
+      dualUse: sm.getDualUse(),
+      ecosystemNotes: sm.getEcosystemNotes()
+    };
+  }
+
+  /**
+   * Apply Venture-Level Decisions coming from a loaded assessment (cache or Smartsheet).
+   * Persists each value through StateManager and updates the UI controls.
+   */
+  applyVentureDecisions(decisions) {
+    if (!decisions) return;
+    const sm = window.app?.stateManager;
+    if (!sm) return;
+
+    if (decisions.trackAssignment !== undefined) {
+      sm.saveTrackAssignment(decisions.trackAssignment);
+      document.querySelectorAll('input[name="venture-track"]').forEach(r => {
+        r.checked = (parseInt(r.value, 10) === decisions.trackAssignment);
+      });
+    }
+
+    if (decisions.pathway !== undefined) {
+      sm.savePathway(decisions.pathway);
+      document.querySelectorAll('input[name="venture-pathway"]').forEach(r => {
+        r.checked = (r.value === decisions.pathway);
+      });
+    }
+
+    if (decisions.dualUse !== undefined) {
+      sm.saveDualUse(!!decisions.dualUse);
+      const dualUse = document.getElementById('venture-dual-use');
+      if (dualUse) dualUse.checked = !!decisions.dualUse;
+    }
+
+    if (decisions.ecosystemNotes !== undefined) {
+      sm.saveEcosystemNotes(decisions.ecosystemNotes || '');
+      const notes = document.getElementById('venture-ecosystem-notes');
+      if (notes) notes.value = decisions.ecosystemNotes || '';
+    }
   }
 
   /**

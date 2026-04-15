@@ -1660,6 +1660,90 @@ body {
   background: var(--brand-success);
 }
 
+/* ---------- Venture-Level Decisions Card ---------- */
+.venture-decisions-card {
+  margin-top: 24px;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid var(--slate-200);
+}
+
+.venture-decisions-card .form-group {
+  margin-bottom: 18px;
+}
+
+.venture-decisions-card .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.venture-decisions-card > .form-group > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--slate-700);
+  margin-bottom: 8px;
+}
+
+.venture-decisions-card textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--slate-300);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 100px;
+  box-sizing: border-box;
+}
+
+.venture-decisions-card textarea:focus {
+  outline: none;
+  border-color: var(--nr-teal-1);
+  box-shadow: 0 0 0 3px rgba(0, 128, 128, 0.1);
+}
+
+.radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.radio-row .radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--slate-700);
+  cursor: pointer;
+  margin-bottom: 0;
+}
+
+.radio-row .radio-option input[type="radio"] {
+  accent-color: var(--nr-teal-1);
+  cursor: pointer;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--slate-700);
+  cursor: pointer;
+  margin-bottom: 0 !important;
+}
+
+.checkbox-inline input[type="checkbox"] {
+  accent-color: var(--nr-teal-1);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 /* ---------- Database Sync Section ---------- */
 .database-sync-section {
   margin-top: 24px;
@@ -3404,6 +3488,17 @@ body {
 .assessment-badge.smartsheet-source {
   background: rgba(0, 130, 165, 0.12);
   color: var(--nr-teal-1);
+}
+
+/* Venture-level decision badges (Track / Pathway / Dual-use) */
+.assessment-badge.decision-track,
+.assessment-badge.decision-pathway,
+.assessment-badge.decision-dualuse {
+  background: var(--slate-100);
+  color: var(--slate-600);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
 }
 
 .smartsheet-section .assessment-list {

@@ -1644,7 +1644,13 @@ class App {
           advisorName: rowData.advisorName,
           portfolio: rowData.portfolio,
           smartsheetRowId: entry.rowId,
-          userScores: {}
+          userScores: {},
+          // Venture-Level Advisor Decisions from Smartsheet row
+          finalRecommendation: rowData.finalRecommendation || '',
+          ecosystemNotes: rowData.ecosystemNotes || '',
+          trackAssignment: rowData.trackAssignment != null ? Number(rowData.trackAssignment) : null,
+          pathway: rowData.pathway || null,
+          dualUse: !!rowData.dualUse
         };
 
         // Map Smartsheet fields back to userScores
@@ -1774,7 +1780,7 @@ class App {
       // Check if summary tab should be enabled
       if (this.tabManager.allReady()) {
         this.tabManager.enableTab('summary');
-        
+
         // Update summary view
         this.summaryView.update({
           company: assessment.aiData.company,
@@ -1785,7 +1791,10 @@ class App {
           iprisk: assessment.aiData.iprisk
         });
       }
-      
+
+      // Restore venture-level advisor decisions + final recommendation
+      this._restoreVentureDecisions(assessment);
+
       // Activate first tab
       this.tabManager.activateTab('overview');
       
@@ -1863,6 +1872,38 @@ class App {
         }
       });
     }
+
+    // Restore venture-level advisor decisions + final recommendation
+    this._restoreVentureDecisions(assessment);
+  }
+
+  /**
+   * Restore Venture-Level Advisor Decisions (Track, Pathway, Dual-use, Ecosystem notes)
+   * and the Final Recommendation text from a loaded assessment object.
+   * Safe to call with partial/missing fields.
+   * @private
+   */
+  _restoreVentureDecisions(assessment) {
+    if (!assessment) return;
+
+    // Final recommendation textarea
+    if (typeof assessment.finalRecommendation === 'string') {
+      this.stateManager.saveFinalRecommendation(assessment.finalRecommendation);
+      const textarea = document.getElementById('final-recommendation-text');
+      if (textarea) {
+        textarea.value = assessment.finalRecommendation;
+        const charCount = document.getElementById('recommendation-char-count');
+        if (charCount) charCount.textContent = `${assessment.finalRecommendation.length} / 2000`;
+      }
+    }
+
+    // Venture-level decisions via SummaryView helper
+    this.summaryView?.applyVentureDecisions({
+      trackAssignment: assessment.trackAssignment,
+      pathway: assessment.pathway,
+      dualUse: assessment.dualUse,
+      ecosystemNotes: assessment.ecosystemNotes
+    });
   }
 }
 

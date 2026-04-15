@@ -231,6 +231,29 @@ class ModalManager {
    * @param {Array} assessments - List of cached assessments
    * @returns {Promise<Object|null>} - Selected assessment or null if cancelled
    */
+  /**
+   * Render venture-level decision badges (Track / Pathway / Dual-use) for an
+   * assessment entry. Returns an empty string if no decisions are set.
+   */
+  renderDecisionBadges(a) {
+    if (!a) return '';
+    const badges = [];
+    if (a.trackAssignment === 1 || a.trackAssignment === 2 || a.trackAssignment === 3) {
+      badges.push(`<span class="assessment-badge decision-track">Track ${a.trackAssignment}</span>`);
+    }
+    if (a.pathway === 'license') {
+      badges.push('<span class="assessment-badge decision-pathway">License</span>');
+    } else if (a.pathway === 'company') {
+      badges.push('<span class="assessment-badge decision-pathway">Company</span>');
+    } else if (a.pathway === 'both') {
+      badges.push('<span class="assessment-badge decision-pathway">Both</span>');
+    }
+    if (a.dualUse) {
+      badges.push('<span class="assessment-badge decision-dualuse">Dual-use</span>');
+    }
+    return badges.join('');
+  }
+
   showLoadPreviousModal(assessments, options = {}) {
     return new Promise((resolve) => {
       this.resolvePromise = resolve;
@@ -250,6 +273,7 @@ class ModalManager {
             </div>
             <div class="assessment-item-meta">
               <span class="assessment-advisor">${this.escapeHtml(a.advisorName)}</span>
+              ${this.renderDecisionBadges(a)}
               ${a.hasFullData ? '<span class="assessment-badge full-data">Full Data</span>' : '<span class="assessment-badge scores-only">Scores Only</span>'}
             </div>
           </div>
@@ -431,6 +455,7 @@ class ModalManager {
                 </div>
                 <div class="assessment-item-meta">
                   <span class="assessment-advisor">${this.escapeHtml(a.advisorName || '')}</span>
+                  ${this.renderDecisionBadges(a)}
                   <span class="assessment-badge smartsheet-source">Smartsheet</span>
                 </div>
               </div>

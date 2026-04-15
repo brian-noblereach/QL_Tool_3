@@ -93,7 +93,12 @@ class StateManager {
       smartsheetRowId: null,
       assessmentKey: null,
       finalRecommendation: '',
-      customVentureName: null
+      customVentureName: null,
+      // Venture-level advisor decisions (no AI phase; Summary tab)
+      ecosystemNotes: '',
+      trackAssignment: null,    // 1 | 2 | 3 | null
+      pathway: null,            // 'license' | 'company' | 'both' | null
+      dualUse: false
     };
   }
 
@@ -170,6 +175,78 @@ class StateManager {
     return state?.customVentureName || null;
   }
 
+  // ========== VENTURE-LEVEL ADVISOR DECISIONS ==========
+
+  /**
+   * Save the Local Ecosystem Activation notes
+   * @param {string} text - Free-text notes about local ecosystem partners
+   */
+  saveEcosystemNotes(text) {
+    const state = this.getState();
+    if (!state) return;
+    state.ecosystemNotes = text || '';
+    state.timestamp = Date.now();
+    this.saveState(state);
+  }
+
+  getEcosystemNotes() {
+    const state = this.getState();
+    return state?.ecosystemNotes || '';
+  }
+
+  /**
+   * Save Track assignment (1, 2, or 3)
+   * @param {number|null} track - 1, 2, 3, or null to clear
+   */
+  saveTrackAssignment(track) {
+    const state = this.getState();
+    if (!state) return;
+    const valid = (track === 1 || track === 2 || track === 3) ? track : null;
+    state.trackAssignment = valid;
+    state.timestamp = Date.now();
+    this.saveState(state);
+  }
+
+  getTrackAssignment() {
+    const state = this.getState();
+    return state?.trackAssignment ?? null;
+  }
+
+  /**
+   * Save Pathway choice
+   * @param {string|null} pathway - 'license' | 'company' | 'both' | null
+   */
+  savePathway(pathway) {
+    const state = this.getState();
+    if (!state) return;
+    const valid = ['license', 'company', 'both'].includes(pathway) ? pathway : null;
+    state.pathway = valid;
+    state.timestamp = Date.now();
+    this.saveState(state);
+  }
+
+  getPathway() {
+    const state = this.getState();
+    return state?.pathway ?? null;
+  }
+
+  /**
+   * Save Dual-use flag
+   * @param {boolean} flag
+   */
+  saveDualUse(flag) {
+    const state = this.getState();
+    if (!state) return;
+    state.dualUse = !!flag;
+    state.timestamp = Date.now();
+    this.saveState(state);
+  }
+
+  getDualUse() {
+    const state = this.getState();
+    return !!state?.dualUse;
+  }
+
   markComplete() {
     const state = this.getState();
     if (state) {
@@ -212,11 +289,17 @@ class StateManager {
   restoreFromState() {
     const state = this.getState();
     if (!state) return null;
-    
+
     return {
       companyInput: state.companyInput,
       completedPhases: state.completedPhases || {},
-      userScores: state.userScores || {}
+      userScores: state.userScores || {},
+      finalRecommendation: state.finalRecommendation || '',
+      customVentureName: state.customVentureName || null,
+      ecosystemNotes: state.ecosystemNotes || '',
+      trackAssignment: state.trackAssignment ?? null,
+      pathway: state.pathway ?? null,
+      dualUse: !!state.dualUse
     };
   }
 
@@ -314,7 +397,13 @@ class StateManager {
           iprisk: data.iprisk || null
         },
         ventureName: data.ventureName || this.extractVentureName(data),
-        advisorName: state.scaName || state.companyInput?.scaName || 'Unknown'
+        advisorName: state.scaName || state.companyInput?.scaName || 'Unknown',
+        // Venture-level advisor decisions
+        finalRecommendation: state.finalRecommendation || '',
+        ecosystemNotes: state.ecosystemNotes || '',
+        trackAssignment: state.trackAssignment ?? null,
+        pathway: state.pathway ?? null,
+        dualUse: !!state.dualUse
       };
 
       // Store in cache (keyed by assessment key)
@@ -435,7 +524,11 @@ class StateManager {
       hasFullData: !!(a.aiData && Object.values(a.aiData).some(v => v !== null)),
       companyUrl: a.companyInput?.url || '',
       fileName: a.companyInput?.fileName || '',
-      smartsheetRowId: a.smartsheetRowId
+      smartsheetRowId: a.smartsheetRowId,
+      // Venture-level decision badges
+      trackAssignment: a.trackAssignment ?? null,
+      pathway: a.pathway ?? null,
+      dualUse: !!a.dualUse
     }));
     
     // Sort by most recent first
