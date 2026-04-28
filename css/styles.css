@@ -1644,7 +1644,16 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   margin-top: 12px;
+}
+
+.unsubmitted-reminder {
+  width: 100%;
+  color: #d97706;
+  font-size: 0.85rem;
+  margin-top: 8px;
+  font-style: italic;
 }
 
 #recommendation-char-count {

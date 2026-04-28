@@ -242,31 +242,38 @@ class AnalysisPipeline {
       estimatedDuration: phase.duration
     });
 
+    const callPhaseApi = async () => {
+      switch (phase.key) {
+        case 'company':    return this.runCompanyAnalysis();
+        case 'team':       return this.runTeamAnalysis();
+        case 'competitive':return this.runCompetitiveAnalysis();
+        case 'funding':    return this.runFundingAnalysis();
+        case 'market':     return this.runMarketAnalysis();
+        case 'iprisk':     return this.runIpRiskAnalysis();
+        default:           throw new Error(`Unknown phase: ${phase.key}`);
+      }
+    };
+
     const runPhase = async () => {
       try {
         let result;
-
-        switch (phase.key) {
-          case 'company':
-            result = await this.runCompanyAnalysis();
-            break;
-          case 'team':
-            result = await this.runTeamAnalysis();
-            break;
-          case 'competitive':
-            result = await this.runCompetitiveAnalysis();
-            break;
-          case 'funding':
-            result = await this.runFundingAnalysis();
-            break;
-          case 'market':
-            result = await this.runMarketAnalysis();
-            break;
-          case 'iprisk':
-            result = await this.runIpRiskAnalysis();
-            break;
-          default:
-            throw new Error(`Unknown phase: ${phase.key}`);
+        try {
+          result = await callPhaseApi();
+        } catch (firstError) {
+          // Auto-retry once if the error is a token/context limit issue
+          if (this._isTokenLimitError(firstError)) {
+            Debug.log(`[Pipeline] Token limit error in ${phase.key}, auto-retrying...`);
+            this.emit('phaseAutoRetry', {
+              phase: phase.key,
+              name: phase.name
+            });
+            // Brief delay before retry — the AI search tools typically return
+            // different (shorter) results on the second attempt
+            await new Promise(r => setTimeout(r, 3000));
+            result = await callPhaseApi();
+          } else {
+            throw firstError;
+          }
         }
 
         phase.data = result;
@@ -288,10 +295,15 @@ class AnalysisPipeline {
         phase.error = error;
         phase.endTime = Date.now();
 
+        // Replace raw token limit errors with a user-friendly message
+        const friendlyMessage = this._isTokenLimitError(error)
+          ? `${phase.name} failed: the website content was too large to process. Click Retry to try again.`
+          : error.message;
+
         this.emit('phaseError', {
           phase: phase.key,
           name: phase.name,
-          error: error.message,
+          error: friendlyMessage,
           canRetry: true
         });
 
@@ -339,6 +351,22 @@ class AnalysisPipeline {
     delete phase.promise;
     
     return this.executePhase(key);
+  }
+
+  /**
+   * Check if an error is a token/context length limit error from the LLM.
+   * These are transient — retrying often succeeds because web search tools
+   * return different (shorter) content on each attempt.
+   * @param {Error} error
+   * @returns {boolean}
+   */
+  _isTokenLimitError(error) {
+    if (!error || !error.message) return false;
+    const msg = error.message.toLowerCase();
+    return (msg.includes('token') && (msg.includes('limit') || msg.includes('exceed')))
+        || msg.includes('context_length_exceeded')
+        || msg.includes('context length')
+        || (msg.includes('input') && msg.includes('too long'));
   }
 
   /**

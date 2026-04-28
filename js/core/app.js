@@ -27,10 +27,18 @@ class App {
       
       this.toastManager = new ToastManager();
       this.toastManager.init();
-      
+
+      // Warn user if localStorage is unavailable (private browsing, storage blocked)
+      if (!this.stateManager.storageAvailable) {
+        this.toastManager.warning(
+          'Browser storage unavailable (private browsing?). Your work will not persist between sessions. Submit to Smartsheet to save your scores.',
+          { duration: 10000 }
+        );
+      }
+
       this.modalManager = new ModalManager();
       this.modalManager.init();
-      
+
       // Initialize views
       this.pipeline = new AnalysisPipeline();
       this.progressView = new ProgressView();
@@ -432,16 +440,20 @@ class App {
       }
     });
     
+    this.pipeline.on('phaseAutoRetry', (data) => {
+      this.toastManager.info(`${data.name}: web content was too large — retrying automatically...`);
+    });
+
     this.pipeline.on('phaseError', (data) => {
       const tabKey = data.phase === 'company' ? 'overview' : data.phase;
       this.tabManager.setError(tabKey);
       this.updatePhaseUI(data.phase, 'error');
-      
+
       this.toastManager.phaseError(data.name, () => {
         this.retryPhase(data.phase);
       });
     });
-    
+
     this.pipeline.on('overviewReady', (data) => {
       // Switch to results view after company analysis
       this.showSection('results');
@@ -992,6 +1004,9 @@ class App {
       const confirmed = confirm('Analysis in progress. Are you sure you want to start over?');
       if (!confirmed) return;
       this.pipeline.cancel();
+    } else if (this.hasUnsubmittedWork()) {
+      const confirmed = confirm('You have unsubmitted scores or recommendation text. Starting over will discard them. Continue?');
+      if (!confirmed) return;
     }
     
     // Clear state
@@ -1817,6 +1832,11 @@ class App {
   async restoreScoresOnly(assessment) {
     // Partial restore - we don't have AI data but we can show/edit scores
 
+    // Reset pipeline, tabs, and assessment view to clear stale state
+    this.pipeline.reset();
+    this.tabManager.reset();
+    this.assessmentView.reset();
+
     // Pre-fill URL input
     const urlInput = document.getElementById('company-url');
     const scaInput = document.getElementById('sca-name');
@@ -1840,9 +1860,6 @@ class App {
 
     // Restore user scores to UI so they're visible and editable
     if (assessment.userScores) {
-      // Reset assessment view first to clear any stale state
-      this.assessmentView.reset();
-
       Object.entries(assessment.userScores).forEach(([dim, scoreData]) => {
         if (scoreData && scoreData.score !== null && scoreData.score !== undefined) {
           this.assessmentView.setUserScore(dim, scoreData);
@@ -1875,6 +1892,31 @@ class App {
 
     // Restore venture-level advisor decisions + final recommendation
     this._restoreVentureDecisions(assessment);
+
+    // Switch to results view
+    this.showSection('results');
+    this.state = 'results';
+
+    // Set venture name
+    const ventureName = assessment.ventureName || assessment.companyInput?.url || 'Loaded Assessment';
+    this.stateManager.saveCustomVentureName(ventureName);
+    this.setVentureNameDisplay(ventureName);
+
+    // Enable all tabs (no AI data, but scoring cards are functional)
+    ['overview', 'team', 'funding', 'competitive', 'market', 'iprisk', 'solutionvalue', 'summary'].forEach(tab => {
+      this.tabManager.enableTab(tab);
+    });
+
+    // Update summary view and navigate to it
+    this.summaryView.update({
+      company: null, team: null, funding: null,
+      competitive: null, market: null, iprisk: null
+    });
+    this.tabManager.activateTab('summary');
+
+    // Enable export
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) exportBtn.disabled = false;
   }
 
   /**
@@ -1905,15 +1947,38 @@ class App {
       ecosystemNotes: assessment.ecosystemNotes
     });
   }
+
+  /**
+   * Check if there is unsubmitted work that would be lost on navigation.
+   * @returns {boolean} True if there are unsubmitted scores or recommendation text
+   */
+  hasUnsubmittedWork() {
+    if (this.state !== 'results') return false;
+
+    // Check for unsubmitted scores (score set but not yet sent to Smartsheet)
+    const scores = this.assessmentView?.userScores || {};
+    const hasUnsubmittedScores = Object.values(scores).some(s =>
+      s && s.score !== null && s.score !== undefined && !s.submitted
+    );
+
+    // Check for unsubmitted recommendation text
+    const recTextarea = document.getElementById('final-recommendation-text');
+    const hasUnsubmittedRec = recTextarea?.value?.trim() &&
+      !this.summaryView?.recommendationSubmitted;
+
+    return hasUnsubmittedScores || hasUnsubmittedRec;
+  }
 }
 
 // App initialization is handled by auth.js in index.html
 // Auth gate verifies access before calling new App().init()
 
-// Warn before leaving during analysis
+// Warn before leaving with unsaved work
 window.addEventListener('beforeunload', (e) => {
-  if (window.app && window.app.state === 'analyzing') {
+  if (!window.app) return;
+
+  if (window.app.state === 'analyzing' || window.app.hasUnsubmittedWork()) {
     e.preventDefault();
-    e.returnValue = 'Analysis in progress. Are you sure you want to leave?';
+    e.returnValue = 'You have unsaved work. Are you sure you want to leave?';
   }
 });

@@ -13,26 +13,59 @@ class StateManager {
     this.storageKey = 'noblereach_qa_state';
     this.assessmentCacheKey = 'noblereach_assessments';
     this.version = '2.1'; // Bumped for new assessment caching
+    this.storageAvailable = true;
+    this._storageHealthy = true;
+    this._lastStorageWarningTime = 0;
   }
 
   init() {
     console.log('StateManager initialized');
+    this.checkStorageAvailability();
     // Migrate old data if needed
-    this.migrateIfNeeded();
+    if (this.storageAvailable) {
+      this.migrateIfNeeded();
+    }
+  }
+
+  /**
+   * Probe localStorage with a test write/read/delete cycle.
+   * Sets this.storageAvailable to false if storage is inaccessible.
+   * @returns {boolean} Whether localStorage is available
+   */
+  checkStorageAvailability() {
+    try {
+      const testKey = '__storage_test__';
+      localStorage.setItem(testKey, '1');
+      const val = localStorage.getItem(testKey);
+      localStorage.removeItem(testKey);
+      if (val !== '1') {
+        this.storageAvailable = false;
+      }
+    } catch (e) {
+      this.storageAvailable = false;
+    }
+    if (!this.storageAvailable) {
+      Debug.error('[StateManager] localStorage is not available (private browsing or storage blocked)');
+    }
+    return this.storageAvailable;
   }
 
   // ========== CURRENT SESSION STATE ==========
 
   checkpoint(phaseKey, phaseData) {
+    if (!this.storageAvailable) return;
     const currentState = this.getState() || this.createEmptyState();
-    
+
     currentState.completedPhases = currentState.completedPhases || {};
     currentState.completedPhases[phaseKey] = phaseData;
     currentState.timestamp = Date.now();
     currentState.status = 'in_progress';
-    
-    this.saveState(currentState);
-    console.log('Checkpoint saved:', phaseKey);
+
+    if (!this.saveState(currentState)) {
+      Debug.error('[StateManager] Checkpoint failed for phase:', phaseKey);
+    } else {
+      console.log('Checkpoint saved:', phaseKey);
+    }
   }
 
   hasIncompleteAnalysis() {
@@ -68,12 +101,35 @@ class StateManager {
   }
 
   saveState(state) {
+    if (!this.storageAvailable) {
+      this._notifySaveFailure('storage_unavailable');
+      return false;
+    }
     try {
       state.version = this.version;
       localStorage.setItem(this.storageKey, JSON.stringify(state));
+      return true;
     } catch (error) {
-      console.error('Error saving state:', error);
+      Debug.error('[StateManager] Error saving state:', error);
+      this._storageHealthy = false;
+      this._notifySaveFailure('saveState');
+      return false;
     }
+  }
+
+  /**
+   * Notify user of a localStorage save failure via toast.
+   * Debounced to avoid flooding the user with repeated warnings.
+   * @param {string} context - Descriptive context for the failure (for logging)
+   */
+  _notifySaveFailure(context) {
+    const now = Date.now();
+    if (now - this._lastStorageWarningTime < 30000) return; // Debounce: 30s
+    this._lastStorageWarningTime = now;
+    Debug.error('[StateManager] Save failure:', context);
+    window.app?.toastManager?.warning(
+      'Unable to save locally. Your scores will still submit to Smartsheet, but cannot be recovered if you close this tab.'
+    );
   }
 
   clearState() {
@@ -119,9 +175,9 @@ class StateManager {
   }
 
   saveUserScore(dimension, scoreData) {
-    const state = this.getState();
-    if (!state) return;
-    
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
+
     state.userScores = state.userScores || {};
     state.userScores[dimension] = scoreData;
     state.timestamp = Date.now();
@@ -138,8 +194,8 @@ class StateManager {
    * @param {string} text - The recommendation text
    */
   saveFinalRecommendation(text) {
-    const state = this.getState();
-    if (!state) return;
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
     state.finalRecommendation = text;
     state.timestamp = Date.now();
     this.saveState(state);
@@ -159,8 +215,8 @@ class StateManager {
    * @param {string} name - The custom venture name
    */
   saveCustomVentureName(name) {
-    const state = this.getState();
-    if (!state) return;
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
     state.customVentureName = name || null;
     state.timestamp = Date.now();
     this.saveState(state);
@@ -182,8 +238,8 @@ class StateManager {
    * @param {string} text - Free-text notes about local ecosystem partners
    */
   saveEcosystemNotes(text) {
-    const state = this.getState();
-    if (!state) return;
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
     state.ecosystemNotes = text || '';
     state.timestamp = Date.now();
     this.saveState(state);
@@ -199,8 +255,8 @@ class StateManager {
    * @param {number|null} track - 1, 2, 3, or null to clear
    */
   saveTrackAssignment(track) {
-    const state = this.getState();
-    if (!state) return;
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
     const valid = (track === 1 || track === 2 || track === 3) ? track : null;
     state.trackAssignment = valid;
     state.timestamp = Date.now();
@@ -217,8 +273,8 @@ class StateManager {
    * @param {string|null} pathway - 'license' | 'company' | 'both' | null
    */
   savePathway(pathway) {
-    const state = this.getState();
-    if (!state) return;
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
     const valid = ['license', 'company', 'both'].includes(pathway) ? pathway : null;
     state.pathway = valid;
     state.timestamp = Date.now();
@@ -235,8 +291,8 @@ class StateManager {
    * @param {boolean} flag
    */
   saveDualUse(flag) {
-    const state = this.getState();
-    if (!state) return;
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
     state.dualUse = !!flag;
     state.timestamp = Date.now();
     this.saveState(state);
@@ -248,6 +304,7 @@ class StateManager {
   }
 
   markComplete() {
+    if (!this.storageAvailable) return;
     const state = this.getState();
     if (state) {
       state.status = 'complete';
@@ -310,13 +367,12 @@ class StateManager {
    * @param {string} rowId - The Smartsheet row ID
    */
   saveSmartsheetRowId(rowId) {
-    const state = this.getState();
-    if (state) {
-      state.smartsheetRowId = rowId;
-      state.timestamp = Date.now();
-      this.saveState(state);
-      console.log('Smartsheet row ID saved:', rowId);
-    }
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
+    state.smartsheetRowId = rowId;
+    state.timestamp = Date.now();
+    this.saveState(state);
+    console.log('Smartsheet row ID saved:', rowId);
   }
 
   /**
@@ -476,11 +532,15 @@ class StateManager {
    * @param {Object} cache - Cache object to save
    */
   saveAssessmentCache(cache) {
+    if (!this.storageAvailable) {
+      this._notifySaveFailure('cache_storage_unavailable');
+      return;
+    }
     try {
       const data = JSON.stringify(cache);
       localStorage.setItem(this.assessmentCacheKey, data);
     } catch (error) {
-      console.error('Error saving assessment cache:', error);
+      Debug.error('[StateManager] Error saving assessment cache:', error);
       // If localStorage is full, try to clear oldest entries
       if (error.name === 'QuotaExceededError') {
         console.warn('Assessment cache quota exceeded, pruning oldest entries...');
@@ -488,8 +548,13 @@ class StateManager {
         try {
           localStorage.setItem(this.assessmentCacheKey, JSON.stringify(cache));
         } catch (e) {
-          console.error('Still cannot save after pruning. Cache has', Object.keys(cache).length, 'entries.');
+          Debug.error('[StateManager] Still cannot save after pruning. Cache has', Object.keys(cache).length, 'entries.');
+          this._storageHealthy = false;
+          this._notifySaveFailure('cache_quota');
         }
+      } else {
+        this._storageHealthy = false;
+        this._notifySaveFailure('cache_save');
       }
     }
   }

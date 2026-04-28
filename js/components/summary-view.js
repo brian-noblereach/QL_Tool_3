@@ -146,6 +146,9 @@ class SummaryView {
 
       // Auto-save to state
       window.app?.stateManager?.saveFinalRecommendation(textarea.value);
+
+      // Update unsubmitted reminder
+      this._updateUnsubmittedReminder();
     });
 
     // Submit handler
@@ -200,6 +203,7 @@ class SummaryView {
       section.classList.add('submitted');
       submitBtn.textContent = '✓ Submitted';
       this.recommendationSubmitted = true;
+      this._updateUnsubmittedReminder();
 
       window.app?.toastManager?.success('Final assessment submitted successfully');
     } catch (error) {
@@ -219,8 +223,10 @@ class SummaryView {
     const section = document.getElementById('final-recommendation-section');
     if (!section) return;
 
-    // Show section once all sections have generated data
-    if (this.allSectionsGenerated()) {
+    // Show section once all sections have generated data OR scores were loaded from Smartsheet
+    const hasGeneratedData = this.allSectionsGenerated();
+    const hasLoadedScores = this.allScoresSubmitted();
+    if (hasGeneratedData || hasLoadedScores) {
       section.classList.remove('hidden');
 
       // Enable submit button only if all scores submitted AND there's text
@@ -240,8 +246,38 @@ class SummaryView {
           submitBtn.textContent = Auth.isExternal() ? 'Save Assessment' : 'Submit Final Assessment';
         }
       }
+
+      // Show/hide unsubmitted reminder
+      this._updateUnsubmittedReminder();
     } else {
       section.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Show or hide the "not yet submitted" reminder below the recommendation textarea.
+   * @private
+   */
+  _updateUnsubmittedReminder() {
+    const footer = document.querySelector('.recommendation-footer');
+    if (!footer) return;
+
+    let reminder = document.getElementById('unsubmitted-reminder');
+    const textarea = document.getElementById('final-recommendation-text');
+    const hasText = textarea?.value?.trim();
+    const shouldShow = hasText && !this.recommendationSubmitted;
+
+    if (shouldShow) {
+      if (!reminder) {
+        reminder = document.createElement('div');
+        reminder.id = 'unsubmitted-reminder';
+        reminder.className = 'unsubmitted-reminder';
+        reminder.textContent = 'Your recommendation has not been submitted to the database yet.';
+        footer.appendChild(reminder);
+      }
+      reminder.classList.remove('hidden');
+    } else if (reminder) {
+      reminder.classList.add('hidden');
     }
   }
 
@@ -569,22 +605,20 @@ class SummaryView {
   getStatusInfo(results) {
     let failedCount = 0;
     let submittedCount = 0;
-    
-    // Check for failed phases
-    if (!results.team) failedCount++;
-    if (!results.funding) failedCount++;
-    if (!results.competitive) failedCount++;
-    if (!results.market) failedCount++;
-    if (!results.iprisk) failedCount++;
-    
+    const av = window.assessmentView;
+
+    // Check for failed phases (don't count as failed if user has scores from Smartsheet load)
+    ['team', 'funding', 'competitive', 'market', 'iprisk'].forEach(dim => {
+      if (!results[dim] && !av?.userScores[dim]?.submitted) failedCount++;
+    });
+
     // Check submitted assessments
-    if (window.assessmentView) {
-      const av = window.assessmentView;
+    if (av) {
       ['team', 'funding', 'competitive', 'market', 'iprisk', 'solutionvalue'].forEach(dim => {
         if (av.userScores[dim]?.submitted) submittedCount++;
       });
     }
-    
+
     return {
       hasFailures: failedCount > 0,
       failedCount,
@@ -596,7 +630,9 @@ class SummaryView {
     const isUserOnly = dimension === 'solutionvalue';
 
     // Check if phase is pending or failed (not applicable for user-only dimensions)
-    if (!data && !isUserOnly) {
+    // Skip this path if user has submitted scores (scores-only restore from Smartsheet)
+    const hasUserScore = window.assessmentView?.userScores[dimension]?.submitted;
+    if (!data && !isUserOnly && !hasUserScore) {
       const isPending = window.app?.state === 'analyzing';
       return `
         <div class="summary-score-card ${isPending ? 'pending' : 'failed'}" data-dimension="${dimension}">
