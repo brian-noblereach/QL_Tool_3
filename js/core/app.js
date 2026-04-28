@@ -1016,7 +1016,12 @@ class App {
     this.progressView.reset();
     this.tabManager.reset();
     this.assessmentView.reset();
-    
+    this.summaryView.reset();
+
+    // Reset venture name display
+    const ventureNameText = document.getElementById('venture-name-text');
+    if (ventureNameText) ventureNameText.textContent = '';
+
     // Clear Smartsheet row ID
     window.SmartsheetIntegration?.clearCurrentRowId();
     

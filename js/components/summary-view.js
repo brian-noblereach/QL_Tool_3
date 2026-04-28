@@ -15,6 +15,53 @@ class SummaryView {
   }
 
   /**
+   * Clear all SummaryView state and reset its DOM elements for a fresh assessment.
+   * Must be called when starting a new analysis or clicking "New Assessment."
+   */
+  reset() {
+    // In-memory state
+    this.data = null;
+    this.recommendationSubmitted = false;
+
+    // Recommendation section
+    const section = document.getElementById('final-recommendation-section');
+    if (section) {
+      section.classList.remove('submitted');
+      section.classList.add('hidden');
+    }
+
+    const textarea = document.getElementById('final-recommendation-text');
+    if (textarea) textarea.value = '';
+
+    const charCount = document.getElementById('recommendation-char-count');
+    if (charCount) charCount.textContent = '0 / 2000';
+
+    const submitBtn = document.getElementById('submit-final-recommendation');
+    if (submitBtn) {
+      submitBtn.textContent = Auth?.isExternal?.() ? 'Save Assessment' : 'Submit Final Assessment';
+      submitBtn.disabled = true;
+    }
+
+    // Unsubmitted reminder
+    const reminder = document.getElementById('unsubmitted-reminder');
+    if (reminder) reminder.remove();
+
+    // Venture-Level Decisions controls
+    document.querySelectorAll('input[name="venture-track"]').forEach(r => { r.checked = false; });
+    document.querySelectorAll('input[name="venture-pathway"]').forEach(r => { r.checked = false; });
+    const dualUse = document.getElementById('venture-dual-use');
+    if (dualUse) dualUse.checked = false;
+    const ecosystemNotes = document.getElementById('venture-ecosystem-notes');
+    if (ecosystemNotes) ecosystemNotes.value = '';
+
+    // Summary content area
+    const summaryContent = document.getElementById('summary-content');
+    if (summaryContent) summaryContent.innerHTML = '';
+
+    Debug.log('[SummaryView] Reset complete');
+  }
+
+  /**
    * Wire up the Venture-Level Decisions card (Track, Pathway, Dual-use, Ecosystem notes).
    * Each control reads from StateManager on load and auto-saves on change.
    */
@@ -447,13 +494,16 @@ class SummaryView {
 
     } catch (error) {
       Debug.error('[SummaryView] Force sync failed:', error.message);
-      statusContent.innerHTML = `
-        <div class="sync-result error">
-          Sync failed: ${error.message}<br>
-          <small>Please try again or contact support if the issue persists.</small>
-        </div>
-      `;
-      window.app?.toastManager?.error('Sync failed. Please try again.');
+      const isTransient = window.SmartsheetIntegration?._isTransientError?.({ error: error.message });
+      const message = isTransient
+        ? 'The database is currently busy.<br><small>Your scores are saved locally. Please try again in a minute.</small>'
+        : `Sync failed: ${this.escape(error.message)}<br><small>Please try again or contact support if the issue persists.</small>`;
+      statusContent.innerHTML = `<div class="sync-result error">${message}</div>`;
+      window.app?.toastManager?.error(
+        isTransient
+          ? 'Database is busy — please try again shortly.'
+          : 'Sync failed. Please try again.'
+      );
     } finally {
       forceSyncBtn.disabled = false;
       forceSyncBtn.textContent = 'Force Sync All Data';

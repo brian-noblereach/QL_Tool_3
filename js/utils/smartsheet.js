@@ -6,12 +6,61 @@
 const SmartsheetIntegration = {
   // Google Apps Script Web App URL (same as StackProxy)
   proxyUrl: 'https://script.google.com/macros/s/AKfycbzt7wElvzQv0CNs-icg7QWpxjf4E5FGqWa6KpCY4zSa_thccGNWhw-THLTpnn8GJa2W/exec',
-  
+
   // Track submission state
   state: {
     lastSubmission: null,
     isSubmitting: false,
     currentRowId: null
+  },
+
+  /**
+   * Detect transient errors that should be auto-retried.
+   * The "Bandwidth quota exceeded" error is a Google Apps Script UrlFetchApp
+   * throttle (rolling-window, ~5-15s recovery) — retrying with exponential
+   * backoff typically succeeds.
+   * @param {Object|Error} result - Result object or error
+   * @returns {boolean}
+   */
+  _isTransientError(result) {
+    const msg = (result?.error || result?.message || '').toString().toLowerCase();
+    if (!msg) return false;
+    return msg.includes('bandwidth quota')
+        || msg.includes('rate limit')
+        || msg.includes('too many requests')
+        || msg.includes('429')
+        || msg.includes('reduce the rate')
+        || (msg.includes('quota') && msg.includes('exceed'));
+  },
+
+  /**
+   * Submit via the iframe/JSONP path with auto-retry on transient errors.
+   * Uses exponential backoff: 5s, 10s, 20s.
+   * @param {Object} requestData
+   * @returns {Promise<Object>} The final result (may still indicate failure)
+   */
+  async _submitWithRetry(requestData) {
+    const delays = [5000, 10000, 20000]; // Up to 3 retries
+    let lastResult = null;
+
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      const result = await this.submitViaIframe(requestData);
+      lastResult = result;
+
+      if (result?.success) return result;
+      if (!this._isTransientError(result)) return result;
+
+      if (attempt < delays.length) {
+        const delay = delays[attempt];
+        Debug.warn(`[Smartsheet] Transient error, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${delays.length})`);
+        window.app?.toastManager?.info(
+          `Database is busy — retrying in ${delay / 1000}s... (${attempt + 1}/${delays.length})`
+        );
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+
+    return lastResult;
   },
 
   /**
@@ -44,9 +93,9 @@ const SmartsheetIntegration = {
         ...payload
       };
 
-      // Use iframe submission to avoid CORS
+      // Use iframe submission to avoid CORS, with auto-retry on transient errors
       Debug.log('[Smartsheet] Request data:', JSON.stringify(requestData));
-      const result = await this.submitViaIframe(requestData);
+      const result = await this._submitWithRetry(requestData);
       Debug.log('[Smartsheet] Full response:', JSON.stringify(result));
 
       if (result.success) {
@@ -54,14 +103,14 @@ const SmartsheetIntegration = {
         if (result.rowId && !isUpdate) {
           this.setCurrentRowId(result.rowId);
         }
-        
+
         this.state.lastSubmission = {
           metric,
           timestamp: new Date().toISOString(),
           rowId: result.rowId || rowId,
           action: isUpdate ? 'update' : 'create'
         };
-        
+
         const actionLabel = result.action === 'updated' ? 'updated in' : 'saved to';
         this.showToast(`${this.formatMetricName(metric)} score ${actionLabel} Smartsheet`, 'success');
         return result;
@@ -71,7 +120,10 @@ const SmartsheetIntegration = {
 
     } catch (error) {
       console.error('Smartsheet submission error:', error);
-      this.showToast(`Failed to save score: ${error.message}`, 'error');
+      const friendly = this._isTransientError({ error: error.message })
+        ? 'Database is busy. Your scores are saved locally — please try again in a minute.'
+        : `Failed to save score: ${error.message}`;
+      this.showToast(friendly, 'error');
       return { success: false, error: error.message };
     } finally {
       this.state.isSubmitting = false;
@@ -107,7 +159,7 @@ const SmartsheetIntegration = {
       };
 
       Debug.log('[Smartsheet] All scores request:', JSON.stringify(requestData));
-      const result = await this.submitViaIframe(requestData);
+      const result = await this._submitWithRetry(requestData);
       Debug.log('[Smartsheet] All scores response:', JSON.stringify(result));
 
       if (result.success) {
@@ -125,7 +177,10 @@ const SmartsheetIntegration = {
 
     } catch (error) {
       console.error('Smartsheet submission error:', error);
-      this.showToast(`Failed to save scores: ${error.message}`, 'error');
+      const friendly = this._isTransientError({ error: error.message })
+        ? 'Database is busy. Your scores are saved locally — please try again in a minute.'
+        : `Failed to save scores: ${error.message}`;
+      this.showToast(friendly, 'error');
       return { success: false, error: error.message };
     } finally {
       this.state.isSubmitting = false;
