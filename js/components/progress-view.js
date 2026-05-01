@@ -71,13 +71,15 @@ class ProgressView {
   showReassuranceMessage(elapsedSeconds) {
     if (!this.elements.message) return;
 
-    // Define message thresholds (in seconds)
+    // Define message thresholds (in seconds).
+    // Tuned to a typical full run of ~7 min and worst-case ~8 min
+    // (company ~220s + max parallel ~260s on a slow day).
     const messages = [
       { threshold: 120, text: 'Analysis in progress...' },
-      { threshold: 180, text: 'AI is analyzing multiple data sources. This can take several minutes.' },
-      { threshold: 300, text: 'Still working. Complex analyses may take 5-10 minutes.' },
-      { threshold: 420, text: 'Taking longer than usual. You may cancel and retry if needed.' },
-      { threshold: 540, text: 'Approaching timeout limit. Consider canceling if no progress.' }
+      { threshold: 240, text: 'AI is analyzing multiple data sources. This can take several minutes.' },
+      { threshold: 360, text: 'Still working. Complex analyses may take 7-8 minutes.' },
+      { threshold: 540, text: 'Taking longer than usual. You may cancel and retry if needed.' },
+      { threshold: 660, text: 'Approaching timeout limit. Consider canceling if no progress.' }
     ];
 
     // Find the appropriate message
@@ -227,7 +229,7 @@ class ProgressView {
       this.elements.percentage.classList.remove('warning');
     }
     if (this.elements.time) {
-      this.elements.time.textContent = 'Estimated: ~10 min';
+      this.elements.time.textContent = 'Estimated: ~8 min';
       this.elements.time.classList.remove('warning');
     }
     if (this.elements.elapsed) {

@@ -4,60 +4,60 @@
 class AnalysisPipeline {
   constructor() {
     this.phases = [
-      { 
+      {
         name: 'Company Analysis',
         key: 'company',
-        duration: 150,  // ~2.5 minutes
+        duration: 220,  // ~3.7 minutes (rubric-aligned solution_value extraction added in v3.3)
         status: 'pending',
         startTime: null,
         endTime: null,
         data: null,
         error: null
       },
-      { 
+      {
         name: 'Researcher Aptitude',
         key: 'team',
-        duration: 70,   // ~1 minute
+        duration: 125,  // observed range 60-180s; mid-high estimate
         status: 'pending',
         startTime: null,
         endTime: null,
         data: null,
         error: null
       },
-      { 
+      {
         name: 'Sector Funding Activity',
         key: 'funding',
-        duration: 60,   // ~1 minute
+        duration: 115,  // observed range 92-135s
         status: 'pending',
         startTime: null,
         endTime: null,
         data: null,
         error: null
       },
-      { 
+      {
         name: 'Competitive Winnability',
         key: 'competitive',
-        duration: 160,  // ~2.7 minutes
+        duration: 195,  // observed range 120-260s
         status: 'pending',
         startTime: null,
         endTime: null,
         data: null,
         error: null
       },
-      { 
+      {
         name: 'Market Opportunity',
         key: 'market',
-        duration: 250,  // ~4 minutes
+        duration: 140,  // observed range 84-180s
         status: 'pending',
         startTime: null,
         endTime: null,
         data: null,
         error: null
       },
-      { 
+      {
         name: 'IP Landscape',
         key: 'iprisk',
-        duration: 60,   // ~1 minute
+        duration: 150,  // observed range 80-215s; mid-high estimate
         status: 'pending',
         startTime: null,
         endTime: null,
