@@ -1018,6 +1018,11 @@ class App {
     this.assessmentView.reset();
     this.summaryView.reset();
 
+    // Reset phase card DOM to pending; component resets above only clear in-memory state
+    ['company', 'team', 'funding', 'competitive', 'market', 'iprisk'].forEach(phase => {
+      this.updatePhaseUI(phase, 'pending');
+    });
+
     // Reset venture name display
     const ventureNameText = document.getElementById('venture-name-text');
     if (ventureNameText) ventureNameText.textContent = '';

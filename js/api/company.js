@@ -6,7 +6,7 @@
 
 const CompanyAPI = {
   config: {
-    timeout: 600000 // 10 minutes
+    timeout: 900000 // 15 minutes — safety net for long-tail Stack AI runs
   },
 
   /**
