@@ -320,7 +320,14 @@ const StackProxy = {
         const base64 = reader.result.split(',')[1];
         resolve(base64);
       };
-      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.onerror = () => {
+        const errName = reader.error?.name || 'unknown';
+        const errMsg = reader.error?.message || '';
+        const hint = (file.size > 0 && file.size < 8192)
+          ? ' — file is unusually small; if it lives in a OneDrive/SharePoint folder, it may be a cloud-only placeholder. Right-click the file in Explorer and choose "Always keep on this device", then re-add it.'
+          : '';
+        reject(new Error(`Failed to read file "${file.name}" (${file.size} bytes, type=${file.type || 'unknown'}): ${errName}${errMsg ? ' — ' + errMsg : ''}${hint}`));
+      };
       reader.readAsDataURL(file);
     });
   },
