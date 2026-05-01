@@ -1614,7 +1614,7 @@ const ExportUtility = {
 
 	The company's core technology involves ${tech.core_technology || 'advanced solutions'}. ${tech.technology_readiness ? 'Technology readiness: ' + tech.technology_readiness + '.' : ''}
 
-	Operating in the ${market.target_market || 'technology'} market, the company addresses ${sv.problem_statement || market.competitive_positioning || 'market needs'} with a value proposition of ${sv.value_proposition || 'innovative solutions'}.`;
+	Operating in the ${market.target_market || 'technology'} market, the company addresses ${sv.problem_statement || 'market needs'} with a value proposition of ${sv.value_proposition || 'innovative solutions'}.`;
 
 	  const narrativeLines = doc.splitTextToSize(narrative, 160);
 	  narrativeLines.forEach(line => {
@@ -1644,7 +1644,6 @@ const ExportUtility = {
 		['Website', overview.website || '-'],
 		['Founded', overview.founded_year || '-'],
 		['Stage', overview.company_stage || '-'],
-		['Employees', overview.employee_count || '-'],
 		['Headquarters', overview.headquarters || '-'],
 		['Target Market', market.target_market || '-'],
 		['Business Model', products.business_model || '-']

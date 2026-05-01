@@ -224,7 +224,6 @@ const CompanyAPI = {
         headquarters: basicInfo.headquarters ||
                       (typeof profile.headquarters === 'object' ? profile.headquarters?.address : profile.headquarters) || 'Unknown',
         company_stage: profile.company_stage?.stage || 'unknown',
-        employee_count: String(profile.employee_count || basicInfo.employee_count || 'Unknown'),
         one_liner: profile.mission_statement || coreTech.problem_solved || '',
         detailed_description: coreTech.technology_description || profile.operating_status || '',
         downstream_summary: ''
@@ -232,7 +231,6 @@ const CompanyAPI = {
 
       data.technology = {
         core_technology: coreTech.technology_description || coreTech.technology_name || '',
-        technical_approach: coreTech.technical_approach || '',
         technology_readiness: 'unknown',
         key_differentiators: coreTech.key_technical_features?.map(f =>
           typeof f === 'object' ? `${f.feature}: ${f.description}` : f
@@ -255,11 +253,6 @@ const CompanyAPI = {
           title: f.title || f.role || '',
           background: f.background || '',
           linkedin_url: f.linkedin || ''
-        })),
-        key_team_members: (teamData.key_team_members || teamData.key_executives || []).map(e => ({
-          name: e.name || '',
-          title: e.role || e.title || '',
-          background: e.background || e.expertise || ''
         }))
       };
 
@@ -300,23 +293,19 @@ const CompanyAPI = {
         news_and_events: (recentData.recent_news_and_announcements || recentData.technology_milestones || []).map(n => ({
           headline: n.announcement || n.milestone || n.description || '',
           date: n.date || '',
-          source_url: n.url || '',
-          summary: n.description || ''
+          source_url: n.url || ''
         }))
       };
 
       const compLandscape = profile.competitive_landscape || data.competitive_landscape || {};
       data.market_context = {
-        target_market: basicInfo.industry || compLandscape.market_position || '',
-        market_trends: [],
-        competitive_positioning: coreTech.differentiation || ''
+        target_market: basicInfo.industry || compLandscape.market_position || ''
       };
 
       const qualityData = profile.data_quality_and_gaps || data.data_quality || {};
       data.data_quality_assessment = {
         overall_confidence: qualityData.information_completeness === 'high' ? 'High' : 'Medium',
         information_gaps: qualityData.information_gaps || qualityData.critical_gaps || [],
-        forward_looking_warnings: [],
         sources_used: qualityData.sources_used || []
       };
     }
@@ -369,14 +358,12 @@ const CompanyAPI = {
         founded_year: 'Unknown',
         headquarters: 'Unknown',
         company_stage: 'unknown',
-        employee_count: 'Unknown',
         one_liner: '',
         detailed_description: '',
         downstream_summary: ''
       },
       technology: {
         core_technology: '',
-        technical_approach: '',
         technology_readiness: 'unknown',
         key_differentiators: [],
         patents: []
@@ -387,8 +374,7 @@ const CompanyAPI = {
         target_industries: []
       },
       team: {
-        founders: [],
-        key_team_members: []
+        founders: []
       },
       funding_and_investors: {
         total_funding: 'Unknown',
@@ -406,14 +392,11 @@ const CompanyAPI = {
         news_and_events: []
       },
       market_context: {
-        target_market: '',
-        market_trends: [],
-        competitive_positioning: ''
+        target_market: ''
       },
       data_quality_assessment: {
         overall_confidence: 'Low',
         information_gaps: [],
-        forward_looking_warnings: [],
         sources_used: []
       }
     };

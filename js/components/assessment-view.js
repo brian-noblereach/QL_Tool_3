@@ -606,13 +606,6 @@ class AssessmentView {
         <div class="overview-card">
           <h3>Market Context</h3>
           ${market.target_market ? `<p><span class="card-label">Target Market</span> ${this.escape(market.target_market)}</p>` : ''}
-          ${market.market_trends?.length > 0 ? `
-            <div class="market-trends-list">
-              <div class="card-label">Market Trends</div>
-              <ul>${market.market_trends.slice(0, 3).map(t => `<li>${this.escape(t)}</li>`).join('')}</ul>
-            </div>
-          ` : ''}
-          ${market.competitive_positioning ? `<p><span class="card-label">Competitive Positioning</span> ${this.escape(market.competitive_positioning)}</p>` : ''}
         </div>
       </div>
 
@@ -620,7 +613,6 @@ class AssessmentView {
         const dq = data.data_quality_assessment || {};
         const confidence = dq.overall_confidence || '';
         const gaps = dq.information_gaps || [];
-        const warnings = dq.forward_looking_warnings || [];
         const sources = dq.sources_used || [];
         if (!confidence && gaps.length === 0 && sources.length === 0) return '';
 
@@ -637,12 +629,6 @@ class AssessmentView {
               <div style="margin-bottom: 8px;">
                 <strong style="font-size: 12px; color: #92400e;">Information Gaps:</strong>
                 ${gaps.map(g => `<div class="info-gap-item">&bull; ${this.escape(g)}</div>`).join('')}
-              </div>
-            ` : ''}
-            ${warnings.length > 0 ? `
-              <div style="margin-bottom: 8px;">
-                <strong style="font-size: 12px; color: #92400e;">Forward-Looking Warnings:</strong>
-                ${warnings.map(w => `<div class="info-gap-item">&bull; ${this.escape(w)}</div>`).join('')}
               </div>
             ` : ''}
             ${sources.length > 0 ? `
