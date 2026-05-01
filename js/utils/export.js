@@ -1335,23 +1335,84 @@ const ExportUtility = {
     doc.text('Supporting Evidence:', PdfLayout.marginLeft, y);
     y += 10;
 
-    // Problem & Value Proposition (from company data - v3 solution_value section)
+    // Sections organized around the Solution Value rubric:
+    // (a) magnitude of benefit vs. alternatives, (b) acuteness of unmet need.
     const company = data.company || {};
     const solutionValue = company.solution_value || {};
-    if (solutionValue.problem_statement || solutionValue.value_proposition) {
+
+    const gapTypeLabels = {
+      no_solution: 'No solution exists',
+      partial_solution: 'Partial solution',
+      inadequate_solution: 'Inadequate solution',
+      aspirational_only: 'Aspirational only'
+    };
+
+    // The Unmet Need (problem + severity + gap type)
+    const una = solutionValue.unmet_need_assessment || {};
+    if (solutionValue.problem_statement || solutionValue.problem_severity || una.gap_type) {
       doc.setFont(undefined, 'bold');
-      doc.text('Problem & Value Proposition:', PdfLayout.marginLeft, y);
+      doc.text('The Unmet Need:', PdfLayout.marginLeft, y);
       y += 7;
       doc.setFont(undefined, 'normal');
       const items = [];
       if (solutionValue.problem_statement) items.push(`Problem: ${solutionValue.problem_statement}`);
-      if (solutionValue.value_proposition) items.push(`Value Prop: ${solutionValue.value_proposition}`);
-      if (solutionValue.problem_severity) items.push(`Severity: ${solutionValue.problem_severity}`);
+      if (solutionValue.problem_severity) {
+        const sev = solutionValue.problem_severity;
+        const sevLine = solutionValue.problem_severity_justification
+          ? `Severity (${sev}): ${solutionValue.problem_severity_justification}`
+          : `Severity: ${sev}`;
+        items.push(sevLine);
+      }
+      if (una.gap_type) {
+        const gapLabel = gapTypeLabels[una.gap_type] || una.gap_type;
+        const gapLine = una.current_coverage
+          ? `Need is currently: ${gapLabel} — ${una.current_coverage}`
+          : `Need is currently: ${gapLabel}`;
+        items.push(gapLine);
+      }
+      const limitations = solutionValue.status_quo_limitations || [];
+      limitations.slice(0, 3).forEach(l => items.push(`Status quo limitation: ${l}`));
       y = PdfLayout.drawBulletList(doc, items, PdfLayout.marginLeft, y, bulletOptions);
       y += 6;
     }
 
-    // Market Needs (from market data)
+    // Beachhead Customer
+    const beachhead = solutionValue.beachhead_customer || {};
+    if (beachhead.segment) {
+      y = PdfLayout.ensureSpace(doc, y, 20);
+      doc.setFont(undefined, 'bold');
+      doc.text('Beachhead Customer:', PdfLayout.marginLeft, y);
+      y += 7;
+      doc.setFont(undefined, 'normal');
+      const items = [`Segment: ${beachhead.segment}${beachhead.evidence_quality ? ` (${beachhead.evidence_quality})` : ''}`];
+      if (beachhead.why_acute) items.push(`Why acute: ${beachhead.why_acute}`);
+      y = PdfLayout.drawBulletList(doc, items, PdfLayout.marginLeft, y, bulletOptions);
+      y += 6;
+    }
+
+    // Quantified Benefits vs. Alternatives
+    const benefits = solutionValue.benefit_magnitude || [];
+    if (solutionValue.value_proposition || benefits.length) {
+      y = PdfLayout.ensureSpace(doc, y, 25);
+      doc.setFont(undefined, 'bold');
+      doc.text('Magnitude of Benefit vs. Alternatives:', PdfLayout.marginLeft, y);
+      y += 7;
+      doc.setFont(undefined, 'normal');
+      const items = [];
+      if (solutionValue.value_proposition) items.push(`Value proposition: ${solutionValue.value_proposition}`);
+      benefits.slice(0, 5).forEach(b => {
+        const metric = b.metric || '?';
+        const baseline = b.baseline || '?';
+        const delta = b.delta || '?';
+        const source = b.evidence_source ? ` [${b.evidence_source}` : '';
+        const quality = b.evidence_quality ? `${source ? ', ' : ' ['}${b.evidence_quality}]` : (source ? ']' : '');
+        items.push(`${metric} — vs ${baseline}: ${delta}${source}${quality}`);
+      });
+      y = PdfLayout.drawBulletList(doc, items, PdfLayout.marginLeft, y, bulletOptions);
+      y += 6;
+    }
+
+    // Market Needs (compressed to 2 bullets)
     const market = data.market || {};
     const marketFormatted = market.formatted || {};
     if (marketFormatted.unmetNeeds?.length || marketFormatted.problemStatement || marketFormatted.differentiation) {
@@ -1364,13 +1425,13 @@ const ExportUtility = {
       if (marketFormatted.problemStatement) items.push(`Problem: ${marketFormatted.problemStatement}`);
       if (marketFormatted.differentiation) items.push(`Differentiation: ${marketFormatted.differentiation}`);
       if (marketFormatted.unmetNeeds?.length) {
-        marketFormatted.unmetNeeds.slice(0, 3).forEach(need => items.push(`Unmet Need: ${need}`));
+        marketFormatted.unmetNeeds.slice(0, 2).forEach(need => items.push(`Unmet Need: ${need}`));
       }
-      y = PdfLayout.drawBulletList(doc, items, PdfLayout.marginLeft, y, bulletOptions);
+      y = PdfLayout.drawBulletList(doc, items.slice(0, 2), PdfLayout.marginLeft, y, bulletOptions);
       y += 6;
     }
 
-    // Competitive Gaps (from competitive data)
+    // Competitive Gaps (compressed to 2 bullets)
     const competitive = data.competitive || {};
     const compAnalysis = competitive.analysis || {};
     const compAssessment = competitive.assessment || {};
@@ -1383,8 +1444,8 @@ const ExportUtility = {
       y += 7;
       doc.setFont(undefined, 'normal');
       const items = [];
-      marketGaps.slice(0, 3).forEach(gap => items.push(`Gap: ${gap}`));
-      diffOpps.slice(0, 3).forEach(opp => items.push(`Opportunity: ${opp}`));
+      if (marketGaps.length) items.push(`Gap: ${marketGaps[0]}`);
+      if (diffOpps.length) items.push(`Opportunity: ${diffOpps[0]}`);
       y = PdfLayout.drawBulletList(doc, items, PdfLayout.marginLeft, y, bulletOptions);
     }
   },

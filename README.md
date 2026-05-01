@@ -2,7 +2,7 @@
 
 An AI-powered due diligence tool for evaluating deep-tech ventures and pre-company research projects.
 
-![Version](https://img.shields.io/badge/version-3.1-blue)
+![Version](https://img.shields.io/badge/version-3.3-blue)
 ![Status](https://img.shields.io/badge/status-pilot-orange)
 
 ---
@@ -15,7 +15,7 @@ The Venture Assessment Platform automates initial qualification of deep-tech ven
 
 - **Multi-source Analysis**: Analyze ventures using website URLs, uploaded documents (PDF/Word/pitch decks), or both
 - **Six Assessment Dimensions**: Researcher Aptitude, Sector Funding, Competitive Winnability, Market Opportunity, IP Landscape, and Solution Value
-- **AI-Powered Scoring**: Five dimensions receive AI-generated scores (1-9) with detailed evidence and rubric-based justifications; Solution Value is human-scored with AI-aggregated evidence
+- **AI-Powered Scoring**: Five dimensions receive AI-generated scores (1-9) with detailed evidence and rubric-based justifications; Solution Value is human-scored with rubric-aligned AI evidence (beachhead customer, unmet-need gap type, quantified benefit comparisons with evidence-quality flags)
 - **Human-in-the-Loop**: Advisors review AI analysis, adjust scores, and add justifications
 - **Pre-company Research Support**: Handles university lab projects, grant-funded research, and technology disclosures alongside incorporated ventures
 - **Fact vs. Plan Distinction**: AI workflows distinguish accomplished milestones from forward-looking claims in pitch decks and grant proposals
@@ -94,6 +94,8 @@ The Venture Assessment Platform automates initial qualification of deep-tech ven
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 3.3 | May 2026 | Solution Value tab redesigned around the human rubric: rubric-aligned `solution_value` schema (beachhead customer, unmet-need gap type, quantified benefit magnitudes with evidence-quality flags, ranked stakeholders), four-section tab layout (Unmet Need / Who Feels It Most / Magnitude of Benefit / Related Evidence), PDF export and scoring guidance updated to match |
+| 3.2 | Apr 2026 | Venture-Level Advisor Decisions on Summary tab: Local Ecosystem Activation, Track Assignment, Pathway, Dual-Use flag — round-tripped through Smartsheet, cache, and PDF |
 | 3.1 | Mar–Apr 2026 | Multi-agent workflow redesigns (Sector Funding, Competitive, IP, Market, Researcher Aptitude), improved team discovery, fact-vs-plan enforcement in venture extraction, scoring rubric calibration |
 | 3.0 | Feb 2026 | V3 schema migration, access control, role-based auth, UI/UX improvements, PDF export remap |
 | 2.1 | Jan 2026 | Load Previous assessments, Smartsheet row updates, assessment caching |

@@ -2004,9 +2004,11 @@ class AssessmentView {
   
   /**
    * Load and render aggregated evidence for Solution Value assessment.
-   * Called when company, market, or competitive data loads.
-   * v3: Now pulls from solution_value section in company data (optional),
-   * plus market and competitive data.
+   * Organized around the Solution Value rubric's two judgments:
+   *   (a) magnitude of benefit vs. current alternatives for the beachhead customer
+   *   (b) acuteness of the unmet need
+   * Sections: 1) The Unmet Need, 2) Who Feels It Most, 3) Magnitude of Benefit,
+   * 4) Related Evidence (Market + Competitive, collapsed).
    */
   loadSolutionValueEvidence() {
     const container = document.getElementById('solutionvalue-evidence');
@@ -2015,172 +2017,248 @@ class AssessmentView {
     const company = this.data.company;
     const market = this.data.market;
     const competitive = this.data.competitive;
+    const sv = company?.solution_value || {};
+
+    const escape = (s) => this.escape(s);
+    const capitalize = (s) => this.capitalize(s);
+
+    const severityClassMap = { low: 'low', moderate: 'medium', high: 'high', critical: 'high' };
+    const severityBadge = (s) => s
+      ? `<span class="severity-badge severity-${severityClassMap[s] || 'medium'}">${escape(capitalize(s))}</span>`
+      : '';
+
+    const gapTypeLabels = {
+      no_solution: 'No solution exists',
+      partial_solution: 'Partial solution',
+      inadequate_solution: 'Inadequate solution',
+      aspirational_only: 'Aspirational only'
+    };
+    const gapTypeBadge = (gt) => gt
+      ? `<span class="sv-gap-badge sv-gap-${gt.replace(/_/g, '-')}">${escape(gapTypeLabels[gt] || gt)}</span>`
+      : '';
+
+    const evidenceQualityLabels = { confirmed: 'Confirmed', inferred: 'Inferred', aspirational: 'Aspirational' };
+    const evidenceQualityBadge = (eq) => eq
+      ? `<span class="sv-quality-badge sv-quality-${eq}">${escape(evidenceQualityLabels[eq] || eq)}</span>`
+      : '';
 
     const sections = [];
 
-    // Build summary header with key metrics
-    const sv = company?.solution_value || {};
+    // Summary header
     const stakeholderCount = (sv.affected_stakeholders || []).length;
-    const impactCount = (sv.non_financial_impact || []).length;
-    const hasSummaryMetrics = sv.problem_severity || stakeholderCount > 0 || impactCount > 0;
-
+    const benefitCount = (sv.benefit_magnitude || []).length;
+    const gapType = sv.unmet_need_assessment?.gap_type;
+    const hasSummaryMetrics = sv.problem_severity || gapType || stakeholderCount > 0 || benefitCount > 0;
     if (hasSummaryMetrics) {
-      const severityColors = { low: 'low', moderate: 'medium', high: 'high', critical: 'high' };
-      const severityClass = severityColors[sv.problem_severity] || 'medium';
       sections.push(`
         <div class="sv-summary-header">
-          ${sv.problem_severity ? `<span class="metric-inline">Severity: <span class="severity-badge severity-${severityClass}">${this.capitalize(sv.problem_severity)}</span></span>` : ''}
+          ${sv.problem_severity ? `<span class="metric-inline">Severity: ${severityBadge(sv.problem_severity)}</span>` : ''}
+          ${gapType ? `<span class="metric-inline">Need gap: ${gapTypeBadge(gapType)}</span>` : ''}
+          ${benefitCount > 0 ? `<span class="metric-inline">Quantified benefits: ${benefitCount}</span>` : ''}
           ${stakeholderCount > 0 ? `<span class="metric-inline">Stakeholders: ${stakeholderCount}</span>` : ''}
-          ${impactCount > 0 ? `<span class="metric-inline">Impact Dimensions: ${impactCount}</span>` : ''}
         </div>
       `);
     }
 
-    // Section 1: Solution Value (from Company API - new v3 optional section)
+    // SECTION 1: The Unmet Need
     if (company) {
-      const hasSolutionValue = sv.problem_statement || sv.value_proposition || sv.problem_severity;
-
-      if (hasSolutionValue) {
-        let svHTML = `
-          <div class="evidence-subsection">
-            <h4>Problem & Value</h4>
-            <div class="evidence-source-tag">Source: Company Analysis (Solution Value)</div>
-            ${sv.problem_statement ? `<div class="evidence-item"><strong>Problem Statement:</strong> ${this.escape(sv.problem_statement)}</div>` : ''}
-            ${sv.value_proposition ? `<div class="evidence-item"><strong>Value Proposition:</strong> ${this.escape(sv.value_proposition)}</div>` : ''}
-        `;
-
-        // Problem Severity justification (badge is now in header)
-        if (sv.problem_severity && sv.problem_severity_justification) {
-          svHTML += `
-            <div class="evidence-item">
-              <p>${this.escape(sv.problem_severity_justification)}</p>
-            </div>
-          `;
-        }
-
-        // Affected Stakeholders - compact list instead of table
-        const stakeholders = sv.affected_stakeholders || [];
-        if (stakeholders.length > 0) {
-          svHTML += `
-            <div class="evidence-item">
-              <strong>Affected Stakeholders:</strong>
-              <ul class="compact-list">${stakeholders.map(s => `<li><strong>${this.escape(s.stakeholder || '')}:</strong> ${this.escape(s.how_affected || '')}</li>`).join('')}</ul>
-            </div>
-          `;
-        }
-
-        // Status Quo Limitations
+      const hasUnmetNeed = sv.problem_statement || sv.problem_severity || gapType || (sv.status_quo_limitations || []).length > 0;
+      if (hasUnmetNeed) {
+        const una = sv.unmet_need_assessment || {};
         const limitations = sv.status_quo_limitations || [];
-        if (limitations.length > 0) {
-          svHTML += `
-            <div class="evidence-item">
-              <strong>Status Quo Limitations:</strong>
-              <ul class="compact-list">${limitations.map(l => `<li>${this.escape(l)}</li>`).join('')}</ul>
-            </div>
-          `;
-        }
-
-        // Non-Financial Impact
         const impacts = sv.non_financial_impact || [];
-        if (impacts.length > 0) {
-          svHTML += `
+        let s1 = `
+          <div class="evidence-subsection" data-section="unmet-need">
+            <h4>The Unmet Need</h4>
+            <div class="evidence-source-tag">Source: Company Analysis</div>
+            ${sv.problem_statement ? `<div class="evidence-item"><strong>Problem:</strong> ${escape(sv.problem_statement)}</div>` : ''}
+            ${sv.problem_severity_justification ? `<div class="evidence-item"><strong>Severity${sv.problem_severity ? ` (${escape(capitalize(sv.problem_severity))})` : ''}:</strong> ${escape(sv.problem_severity_justification)}</div>` : ''}
+        `;
+        if (una.gap_type) {
+          s1 += `
             <div class="evidence-item">
-              <strong>Non-Financial Impact:</strong>
-              <ul class="compact-list">${impacts.map(i => `<li><strong>${this.escape(i.dimension || '')}:</strong> ${this.escape(i.description || '')}</li>`).join('')}</ul>
+              <strong>Need is currently:</strong> ${gapTypeBadge(una.gap_type)}
+              ${una.current_coverage ? `<p class="sv-sub">${escape(una.current_coverage)}</p>` : ''}
+              ${una.evidence ? `<p class="sv-sub-evidence"><em>Evidence:</em> ${escape(una.evidence)}</p>` : ''}
             </div>
           `;
         }
-
-        svHTML += '</div>';
-        sections.push(svHTML);
-      } else {
-        // Fallback: pull from market_context if solution_value not present
-        const marketCtx = company.market_context || {};
-        const targetMarket = marketCtx.target_market || '';
-        const positioning = marketCtx.competitive_positioning || '';
-
-        if (targetMarket || positioning) {
-          sections.push(`
-            <div class="evidence-subsection">
-              <h4>Company Context</h4>
-              <div class="evidence-source-tag">Source: Company Analysis</div>
-              ${targetMarket ? `<div class="evidence-item"><strong>Target Market:</strong> ${this.escape(targetMarket)}</div>` : ''}
-              ${positioning ? `<div class="evidence-item"><strong>Competitive Positioning:</strong> ${this.escape(positioning)}</div>` : ''}
+        if (limitations.length > 0) {
+          s1 += `
+            <div class="evidence-item">
+              <strong>Status quo limitations:</strong>
+              <ul class="compact-list">${limitations.map(l => `<li>${escape(l)}</li>`).join('')}</ul>
             </div>
-          `);
+          `;
         }
+        if (impacts.length > 0) {
+          s1 += `
+            <div class="evidence-item sv-non-financial">
+              <details>
+                <summary><strong>Additional non-financial impact</strong> (${impacts.length})</summary>
+                <ul class="compact-list">${impacts.map(i => `<li><strong>${escape(i.dimension || '')}:</strong> ${escape(i.description || '')}</li>`).join('')}</ul>
+              </details>
+            </div>
+          `;
+        }
+        s1 += '</div>';
+        sections.push(s1);
       }
     }
 
-    // Section 2: Market Needs & Scoring Alignment (from Market API)
-    if (market) {
-      const mFormatted = market.formatted || {};
-      const mAnalysis = market.analysis?.market_analysis || {};
-      const scoringAlignment = market.analysis?.scoring_alignment || {};
-      const unmetNeeds = mFormatted.unmetNeeds || mAnalysis.unmet_needs || [];
-      const executiveSummary = mFormatted.executiveSummary || mAnalysis.executive_summary || '';
-      const mStrengths = mFormatted.strengths || scoringAlignment.strengths || [];
-      const mLimitations = mFormatted.limitations || scoringAlignment.limitations || [];
-
-      if (unmetNeeds.length > 0 || executiveSummary || mStrengths.length > 0) {
-        sections.push(`
-          <div class="evidence-subsection">
-            <h4>Market Needs & Scoring Alignment</h4>
-            <div class="evidence-source-tag">Source: Market Analysis</div>
-            ${executiveSummary ? `<div class="evidence-item"><strong>Executive Summary:</strong> ${this.escape(executiveSummary)}</div>` : ''}
-            ${unmetNeeds.length > 0 ? `
-              <div class="evidence-item">
-                <strong>Unmet Needs:</strong>
-                <ul class="compact-list">${unmetNeeds.map(n => `<li>${this.escape(typeof n === 'string' ? n : JSON.stringify(n))}</li>`).join('')}</ul>
+    // SECTION 2: Who Feels It Most
+    if (company) {
+      const beachhead = sv.beachhead_customer || null;
+      const stakeholders = (sv.affected_stakeholders || []).slice();
+      const hasNewStakeholderShape = stakeholders.length > 0 && stakeholders.some(s => 'pain_severity' in s || 'is_beachhead' in s);
+      if (beachhead?.segment || stakeholders.length > 0) {
+        let s2 = `
+          <div class="evidence-subsection" data-section="who-feels-it">
+            <h4>Who Feels It Most</h4>
+            <div class="evidence-source-tag">Source: Company Analysis</div>
+        `;
+        if (beachhead?.segment) {
+          s2 += `
+            <div class="sv-beachhead-card">
+              <div class="sv-beachhead-header">
+                <span class="sv-beachhead-label">Beachhead customer</span>
+                ${evidenceQualityBadge(beachhead.evidence_quality)}
               </div>
-            ` : ''}
-            ${mStrengths.length > 0 ? `
+              <div class="sv-beachhead-segment">${escape(beachhead.segment)}</div>
+              ${beachhead.why_acute ? `<p class="sv-beachhead-why">${escape(beachhead.why_acute)}</p>` : ''}
+            </div>
+          `;
+        }
+        if (stakeholders.length > 0) {
+          if (hasNewStakeholderShape) {
+            const sevOrder = { critical: 0, high: 1, moderate: 2, low: 3 };
+            const others = stakeholders
+              .filter(s => !s.is_beachhead)
+              .sort((a, b) => (sevOrder[a.pain_severity] ?? 4) - (sevOrder[b.pain_severity] ?? 4));
+            const top = others.slice(0, 2);
+            const rest = others.slice(2);
+            if (top.length > 0 || rest.length > 0) {
+              s2 += `<div class="evidence-item"><strong>Other affected stakeholders:</strong>`;
+              s2 += `<ul class="compact-list sv-stakeholder-list">${top.map(s => `<li>${severityBadge(s.pain_severity)} <strong>${escape(s.stakeholder || '')}:</strong> ${escape(s.how_affected || '')}</li>`).join('')}</ul>`;
+              if (rest.length > 0) {
+                s2 += `
+                  <details class="sv-stakeholder-more">
+                    <summary>Show ${rest.length} more</summary>
+                    <ul class="compact-list sv-stakeholder-list">${rest.map(s => `<li>${severityBadge(s.pain_severity)} <strong>${escape(s.stakeholder || '')}:</strong> ${escape(s.how_affected || '')}</li>`).join('')}</ul>
+                  </details>
+                `;
+              }
+              s2 += `</div>`;
+            }
+          } else {
+            // Fallback for old cached data without pain_severity / is_beachhead
+            s2 += `
               <div class="evidence-item">
-                <strong>Strengths:</strong>
-                <ul class="compact-list">${mStrengths.map(s => `<li>${this.escape(s)}</li>`).join('')}</ul>
+                <strong>Affected stakeholders:</strong>
+                <ul class="compact-list">${stakeholders.map(s => `<li><strong>${escape(s.stakeholder || '')}:</strong> ${escape(s.how_affected || '')}</li>`).join('')}</ul>
               </div>
-            ` : ''}
-            ${mLimitations.length > 0 ? `
-              <div class="evidence-item">
-                <strong>Limitations:</strong>
-                <ul class="compact-list">${mLimitations.map(l => `<li>${this.escape(l)}</li>`).join('')}</ul>
-              </div>
-            ` : ''}
-          </div>
-        `);
+            `;
+          }
+        }
+        s2 += '</div>';
+        sections.push(s2);
       }
     }
 
-    // Section 3: Competitive Gaps & Opportunities (from Competitive API)
-    if (competitive) {
-      // v3: job_to_be_done and market_gaps at top level of analysis
-      const cAnalysis = competitive.analysis || {};
-      const cAssessment = competitive.assessment || {};
-      const cFormatted = competitive.formatted || {};
-      const jobToBeDone = cAnalysis.job_to_be_done || cFormatted.marketOverview?.jobToBeDone || '';
-      const marketGaps = cAnalysis.market_gaps || cFormatted.marketGaps || [];
-      const diffOpportunities = cAssessment.differentiation_opportunities || cFormatted.opportunities || [];
+    // SECTION 3: Magnitude of Benefit vs. Alternatives
+    if (company) {
+      const benefits = sv.benefit_magnitude || [];
+      const hasBenefitField = Array.isArray(sv.benefit_magnitude);
+      if (sv.value_proposition || benefits.length > 0 || hasBenefitField) {
+        let s3 = `
+          <div class="evidence-subsection" data-section="magnitude">
+            <h4>Magnitude of Benefit vs. Alternatives</h4>
+            <div class="evidence-source-tag">Source: Company Analysis</div>
+        `;
+        if (sv.value_proposition) {
+          s3 += `<div class="evidence-item"><strong>Value proposition:</strong> ${escape(sv.value_proposition)}</div>`;
+        }
+        if (benefits.length > 0) {
+          s3 += `
+            <div class="evidence-item">
+              <strong>Quantified comparisons:</strong>
+              <div class="sv-benefit-table-wrap">
+                <table class="sv-benefit-table">
+                  <thead>
+                    <tr><th>Metric</th><th>vs. Baseline</th><th>Improvement</th><th>Source</th><th>Quality</th></tr>
+                  </thead>
+                  <tbody>
+                    ${benefits.map(b => `
+                      <tr class="sv-benefit-row sv-quality-row-${b.evidence_quality || 'unknown'}">
+                        <td>${escape(b.metric || '')}</td>
+                        <td>${escape(b.baseline || '')}</td>
+                        <td>${escape(b.delta || '')}</td>
+                        <td>${escape(b.evidence_source || '')}</td>
+                        <td>${evidenceQualityBadge(b.evidence_quality)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        } else if (hasBenefitField) {
+          s3 += `<div class="evidence-item sv-empty-note">No quantified comparisons surfaced from source materials. Score conservatively per rubric.</div>`;
+        }
+        s3 += '</div>';
+        sections.push(s3);
+      }
+    }
 
-      if (jobToBeDone || marketGaps.length > 0 || diffOpportunities.length > 0) {
-        sections.push(`
-          <div class="evidence-subsection">
-            <h4>Competitive Gaps & Opportunities</h4>
-            <div class="evidence-source-tag">Source: Competitive Analysis</div>
-            ${jobToBeDone ? `<div class="evidence-item"><strong>Job to Be Done:</strong> ${this.escape(jobToBeDone)}</div>` : ''}
-            ${marketGaps.length > 0 ? `
-              <div class="evidence-item">
-                <strong>Market Gaps:</strong>
-                <ul class="compact-list">${marketGaps.map(g => `<li>${this.escape(typeof g === 'string' ? g : JSON.stringify(g))}</li>`).join('')}</ul>
-              </div>
-            ` : ''}
-            ${diffOpportunities.length > 0 ? `
-              <div class="evidence-item">
-                <strong>Differentiation Opportunities:</strong>
-                <ul class="compact-list">${diffOpportunities.map(o => `<li>${this.escape(typeof o === 'string' ? o : JSON.stringify(o))}</li>`).join('')}</ul>
-              </div>
-            ` : ''}
-          </div>
-        `);
+    // SECTION 4: Related Evidence (collapsed by default)
+    if (market || competitive) {
+      const mFormatted = market?.formatted || {};
+      const mAnalysis = market?.analysis?.market_analysis || {};
+      const unmetNeeds = (mFormatted.unmetNeeds || mAnalysis.unmet_needs || []).slice(0, 3);
+      const mDifferentiation = mFormatted.differentiation || '';
+      const mProblemStatement = mFormatted.problemStatement || '';
+
+      const cAnalysis = competitive?.analysis || {};
+      const cAssessment = competitive?.assessment || {};
+      const cFormatted = competitive?.formatted || {};
+      const marketGaps = (cAnalysis.market_gaps || cFormatted.marketGaps || []).slice(0, 3);
+      const diffOpportunities = (cAssessment.differentiation_opportunities || cFormatted.opportunities || []).slice(0, 3);
+
+      const hasMarket = unmetNeeds.length > 0 || mDifferentiation || mProblemStatement;
+      const hasComp = marketGaps.length > 0 || diffOpportunities.length > 0;
+
+      if (hasMarket || hasComp) {
+        let s4 = `
+          <div class="evidence-subsection sv-collapsed-default" data-section="related">
+            <h4>Related Evidence</h4>
+        `;
+        if (hasMarket) {
+          s4 += `
+            <details class="sv-related-card">
+              <summary><strong>Market needs</strong> &mdash; from Market Analysis</summary>
+              <ul class="compact-list">
+                ${mProblemStatement ? `<li><strong>Problem framing:</strong> ${escape(mProblemStatement)}</li>` : ''}
+                ${unmetNeeds.map(n => `<li><strong>Unmet need:</strong> ${escape(typeof n === 'string' ? n : JSON.stringify(n))}</li>`).join('')}
+                ${mDifferentiation ? `<li><strong>Differentiation:</strong> ${escape(mDifferentiation)}</li>` : ''}
+              </ul>
+              <p class="sv-related-link"><a href="#" data-tab-target="market">See Market tab for full analysis &rarr;</a></p>
+            </details>
+          `;
+        }
+        if (hasComp) {
+          s4 += `
+            <details class="sv-related-card">
+              <summary><strong>Competitive gaps</strong> &mdash; from Competitive Analysis</summary>
+              <ul class="compact-list">
+                ${marketGaps.map(g => `<li><strong>Gap:</strong> ${escape(typeof g === 'string' ? g : JSON.stringify(g))}</li>`).join('')}
+                ${diffOpportunities.map(o => `<li><strong>Opportunity:</strong> ${escape(typeof o === 'string' ? o : JSON.stringify(o))}</li>`).join('')}
+              </ul>
+              <p class="sv-related-link"><a href="#" data-tab-target="competitive">See Competitive tab for full analysis &rarr;</a></p>
+            </details>
+          `;
+        }
+        s4 += '</div>';
+        sections.push(s4);
       }
     }
 
@@ -2208,17 +2286,30 @@ class AssessmentView {
         </div>
       `;
 
-      // Make evidence-subsection headers collapsible
-      container.querySelectorAll('.evidence-subsection > h4').forEach((h4, i) => {
+      // Make subsection headers collapsible. Sections marked with sv-collapsed-default start collapsed.
+      container.querySelectorAll('.evidence-subsection > h4').forEach(h4 => {
         h4.classList.add('sv-collapsible-header');
-        h4.innerHTML = `<span class="sv-chevron">▾</span> ${h4.innerHTML}`;
+        h4.innerHTML = `<span class="sv-chevron">&#9662;</span> ${h4.innerHTML}`;
         const subsection = h4.parentElement;
-        // Only expand the first section (Problem & Value) by default
-        if (i >= 1) {
+        if (subsection.classList.contains('sv-collapsed-default')) {
           subsection.classList.add('sv-collapsed');
         }
         h4.addEventListener('click', () => {
           subsection.classList.toggle('sv-collapsed');
+        });
+      });
+
+      // Wire "See X tab" links in Section 4
+      container.querySelectorAll('[data-tab-target]').forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const target = link.dataset.tabTarget;
+          if (window.app?.tabManager?.activateTab) {
+            window.app.tabManager.activateTab(target);
+          } else {
+            const btn = document.querySelector(`.tab-button[data-tab="${target}"]`);
+            if (btn) btn.click();
+          }
         });
       });
     }
