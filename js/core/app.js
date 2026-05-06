@@ -1983,12 +1983,18 @@ class App {
 // App initialization is handled by auth.js in index.html
 // Auth gate verifies access before calling new App().init()
 
-// Warn before leaving with unsaved work
+// Warn before leaving with unsaved work.
+// Most modern browsers ignore the custom message and show a generic "Changes you
+// made may not be saved" prompt — but the message string is still set for older
+// browsers and as a hint to anyone reading the source.
 window.addEventListener('beforeunload', (e) => {
   if (!window.app) return;
 
-  if (window.app.state === 'analyzing' || window.app.hasUnsubmittedWork()) {
+  if (window.app.state === 'analyzing') {
     e.preventDefault();
-    e.returnValue = 'You have unsaved work. Are you sure you want to leave?';
+    e.returnValue = 'Your venture assessment is still running and will be lost if you leave. Continue?';
+  } else if (window.app.hasUnsubmittedWork()) {
+    e.preventDefault();
+    e.returnValue = 'You have scores or recommendation text that have not been submitted to Smartsheet yet. The assessment is saved locally, but unsubmitted scores will not be sent. Continue?';
   }
 });

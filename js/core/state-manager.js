@@ -16,6 +16,9 @@ class StateManager {
     this.storageAvailable = true;
     this._storageHealthy = true;
     this._lastStorageWarningTime = 0;
+    // Auto-expire cached assessments after this many days
+    this.cacheMaxAgeDays = 90;
+    this.cacheMaxEntries = 50;
   }
 
   init() {
@@ -394,9 +397,14 @@ class StateManager {
    * @returns {string} Unique key
    */
   generateAssessmentKey(url, advisorName, fileName = null) {
-    // Normalize URL to domain
+    // 'Document Upload' is a placeholder used by file-only runs (see app.js startAnalysis).
+    // Treat it as a non-URL so the filename branch applies — otherwise every file-only
+    // assessment by the same advisor collides on the same key.
+    const isPlaceholderUrl = url === 'Document Upload' || url === 'Admin Import';
+    const hasRealUrl = url && !isPlaceholderUrl;
+
     let identifier = '';
-    if (url) {
+    if (hasRealUrl) {
       try {
         const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
         identifier = parsed.hostname.replace('www.', '');
@@ -404,12 +412,17 @@ class StateManager {
         identifier = url.toLowerCase().replace(/[^a-z0-9]/g, '');
       }
     } else if (fileName) {
-      // Use file name without extension as identifier
-      identifier = fileName.replace(/\.[^/.]+$/, '').toLowerCase().replace(/[^a-z0-9]/g, '-');
+      // Use file name without extension as identifier (first file if multiple)
+      const firstFile = fileName.split(',')[0].trim();
+      identifier = firstFile.replace(/\.[^/.]+$/, '').toLowerCase().replace(/[^a-z0-9]/g, '-');
+    } else {
+      identifier = 'venture';
     }
-    
+
     const advisor = (advisorName || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '-');
-    return `${identifier}_${advisor}`;
+    // Append timestamp so each new analysis gets a distinct cache slot.
+    // The Load Previous modal shows ventureName/date — the user never sees this key.
+    return `${identifier}_${advisor}_${Date.now()}`;
   }
 
   /**
@@ -464,13 +477,12 @@ class StateManager {
 
       // Store in cache (keyed by assessment key)
       cache[state.assessmentKey] = cachedAssessment;
-      
-      // Keep only last 50 assessments to avoid localStorage limits
+
+      // Cap cache size to avoid localStorage quota issues
       const keys = Object.keys(cache);
-      if (keys.length > 50) {
-        // Remove oldest entries
+      if (keys.length > this.cacheMaxEntries) {
         const sorted = keys.sort((a, b) => (cache[a].timestamp || 0) - (cache[b].timestamp || 0));
-        for (let i = 0; i < keys.length - 50; i++) {
+        for (let i = 0; i < keys.length - this.cacheMaxEntries; i++) {
           delete cache[sorted[i]];
         }
       }
@@ -507,13 +519,14 @@ class StateManager {
   }
 
   /**
-   * Get the assessment cache object
+   * Get the assessment cache object. Auto-prunes entries older than cacheMaxAgeDays.
    * @returns {Object} Cache object
    */
   getAssessmentCache() {
     try {
       const saved = localStorage.getItem(this.assessmentCacheKey);
-      return saved ? JSON.parse(saved) : {};
+      const cache = saved ? JSON.parse(saved) : {};
+      return this._pruneExpired(cache);
     } catch (error) {
       console.error('Error reading assessment cache (possible corruption):', error);
       // Attempt to repair by clearing corrupted cache
@@ -524,6 +537,49 @@ class StateManager {
         // localStorage itself may be inaccessible
       }
       return {};
+    }
+  }
+
+  /**
+   * Drop entries older than cacheMaxAgeDays. Persists the trimmed cache only if
+   * something was actually removed, so callers don't pay write cost on every read.
+   * @param {Object} cache
+   * @returns {Object} The (possibly trimmed) cache
+   */
+  _pruneExpired(cache) {
+    if (!cache || typeof cache !== 'object') return {};
+    const cutoff = Date.now() - (this.cacheMaxAgeDays * 24 * 60 * 60 * 1000);
+    let removed = 0;
+    for (const key of Object.keys(cache)) {
+      const ts = cache[key]?.timestamp || 0;
+      if (ts && ts < cutoff) {
+        delete cache[key];
+        removed++;
+      }
+    }
+    if (removed > 0) {
+      console.log(`[StateManager] Pruned ${removed} expired assessment(s) older than ${this.cacheMaxAgeDays} days`);
+      try {
+        localStorage.setItem(this.assessmentCacheKey, JSON.stringify(cache));
+      } catch (e) {
+        // Non-fatal: pruning failed to persist; will retry on next read
+      }
+    }
+    return cache;
+  }
+
+  /**
+   * Delete every cached assessment. Used by the "Clear All" button in the
+   * Load Previous modal.
+   */
+  clearAllAssessments() {
+    try {
+      localStorage.removeItem(this.assessmentCacheKey);
+      console.log('[StateManager] All cached assessments cleared');
+      return true;
+    } catch (e) {
+      Debug.error?.('[StateManager] Failed to clear cache:', e);
+      return false;
     }
   }
 

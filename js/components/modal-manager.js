@@ -264,6 +264,7 @@ class ModalManager {
       const isExternal = options.isExternal || false;
 
       // Build assessment list HTML
+      const trashIconSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
       const listHtml = assessments.length > 0
         ? assessments.map((a, i) => `
           <div class="assessment-list-item" data-key="${this.escapeHtml(a.key)}" data-index="${i}" data-source="local">
@@ -275,6 +276,7 @@ class ModalManager {
               <span class="assessment-advisor">${this.escapeHtml(a.advisorName)}</span>
               ${this.renderDecisionBadges(a)}
               ${a.hasFullData ? '<span class="assessment-badge full-data">Full Data</span>' : '<span class="assessment-badge scores-only">Scores Only</span>'}
+              <button type="button" class="assessment-delete-btn" data-delete-key="${this.escapeHtml(a.key)}" title="Delete this cached assessment" aria-label="Delete assessment for ${this.escapeHtml(a.ventureName)}">${trashIconSvg}</button>
             </div>
           </div>
         `).join('')
@@ -308,7 +310,10 @@ class ModalManager {
             <input type="text" id="assessment-search" class="assessment-search" placeholder="Search by venture name..." autocomplete="off">
           </div>
           <div class="assessment-list-section">
-            <div class="assessment-list-label">${isExternal ? 'Previous Assessments' : 'Saved Locally'} (${assessments.length})</div>
+            <div class="assessment-list-label">
+              <span><span id="local-list-count-label">${isExternal ? 'Previous Assessments' : 'Saved Locally'} (${assessments.length})</span></span>
+              ${assessments.length > 0 ? '<button class="btn-link" id="clear-all-local-btn" type="button">Clear all</button>' : ''}
+            </div>
             <div class="assessment-list" id="assessment-list">
               ${listHtml}
             </div>
@@ -384,6 +389,41 @@ class ModalManager {
 
     // Selection handler for local list
     localList.addEventListener('click', (e) => {
+      // Per-row delete (trash icon)
+      const deleteBtn = e.target.closest('.assessment-delete-btn');
+      if (deleteBtn) {
+        e.stopPropagation();
+        const key = deleteBtn.dataset.deleteKey;
+        const item = deleteBtn.closest('.assessment-list-item');
+        const ventureName = item?.querySelector('.assessment-venture-name')?.textContent || 'this assessment';
+        if (!confirm(`Delete cached assessment for "${ventureName}"?\n\nThis only removes the local copy. Anything already submitted to Smartsheet stays there.`)) {
+          return;
+        }
+        const sm = window.app?.stateManager;
+        if (sm && key) {
+          sm.deleteAssessment(key);
+        }
+        item?.remove();
+        // If the deleted row was the selected one, reset selection
+        if (this.selectedAssessmentSource === 'local' &&
+            item && parseInt(item.dataset.index, 10) === this.selectedAssessment) {
+          this.selectedAssessment = null;
+          loadBtn.disabled = true;
+        }
+        // Update count + remove "Clear all" button if list is now empty
+        const remaining = localList.querySelectorAll('.assessment-list-item').length;
+        const countLabel = document.getElementById('local-list-count-label');
+        if (countLabel) {
+          const labelPrefix = countLabel.textContent.replace(/\s*\(\d+\)\s*$/, '');
+          countLabel.textContent = `${labelPrefix} (${remaining})`;
+        }
+        if (remaining === 0) {
+          localList.innerHTML = '<div class="no-assessments-message">No previous assessments found in local cache.</div>';
+          document.getElementById('clear-all-local-btn')?.remove();
+        }
+        return;
+      }
+
       const item = e.target.closest('.assessment-list-item');
       if (!item) return;
 
@@ -393,6 +433,28 @@ class ModalManager {
       this.selectedAssessmentSource = 'local';
       loadBtn.disabled = false;
     });
+
+    // Clear-all button
+    const clearAllBtn = document.getElementById('clear-all-local-btn');
+    if (clearAllBtn) {
+      clearAllBtn.addEventListener('click', () => {
+        if (!confirm('Delete all cached assessments from this browser?\n\nThis only clears the local cache. Anything already submitted to Smartsheet stays there.')) {
+          return;
+        }
+        const sm = window.app?.stateManager;
+        if (sm) sm.clearAllAssessments();
+        localList.innerHTML = '<div class="no-assessments-message">No previous assessments found in local cache.</div>';
+        clearAllBtn.remove();
+        const countLabel = document.getElementById('local-list-count-label');
+        if (countLabel) {
+          const labelPrefix = countLabel.textContent.replace(/\s*\(\d+\)\s*$/, '');
+          countLabel.textContent = `${labelPrefix} (0)`;
+        }
+        this.selectedAssessment = null;
+        this.selectedAssessmentSource = 'local';
+        loadBtn.disabled = true;
+      });
+    }
 
     // Double-click to load immediately (local)
     localList.addEventListener('dblclick', (e) => {

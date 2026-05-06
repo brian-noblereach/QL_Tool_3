@@ -2,7 +2,7 @@
 
 An AI-powered due diligence tool for evaluating deep-tech ventures and pre-company research projects.
 
-![Version](https://img.shields.io/badge/version-3.3-blue)
+![Version](https://img.shields.io/badge/version-3.4-blue)
 ![Status](https://img.shields.io/badge/status-pilot-orange)
 
 ---
@@ -94,6 +94,7 @@ The Venture Assessment Platform automates initial qualification of deep-tech ven
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 3.4 | May 2026 | Load Previous reliability: file-only assessments no longer overwrite each other (every analysis now gets a unique cache key, fixing a bug where multiple file uploads by the same advisor collapsed onto a single `documentupload_<advisor>` slot). Cache-management controls added: per-row delete and "Clear all" in the Load Previous modal, plus automatic 90-day expiration of stale entries. Beforeunload prompt reworded to explicitly mention unsubmitted-to-Smartsheet scores instead of generic "unsaved work" |
 | 3.3 | May 2026 | Solution Value tab redesigned around the human rubric: rubric-aligned `solution_value` schema (beachhead customer, unmet-need gap type, quantified benefit magnitudes with evidence-quality flags, ranked stakeholders), four-section tab layout (Unmet Need / Who Feels It Most / Magnitude of Benefit / Related Evidence), PDF export and scoring guidance updated to match. Progress-bar timings recalibrated for current Stack AI run times (~7 min typical, ~8 min worst-case); clearer file-upload error messages |
 | 3.2 | Apr 2026 | Venture-Level Advisor Decisions on Summary tab: Local Ecosystem Activation, Track Assignment, Pathway, Dual-Use flag — round-tripped through Smartsheet, cache, and PDF |
 | 3.1 | Mar–Apr 2026 | Multi-agent workflow redesigns (Sector Funding, Competitive, IP, Market, Researcher Aptitude), improved team discovery, fact-vs-plan enforcement in venture extraction, scoring rubric calibration |

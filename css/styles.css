@@ -3719,6 +3719,31 @@ body {
   color: var(--nr-teal-1);
 }
 
+/* Per-row delete button in Load Previous modal */
+.assessment-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--slate-400);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  margin-left: 4px;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.assessment-delete-btn:hover {
+  color: var(--brand-danger, #dc2626);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.assessment-delete-btn:focus-visible {
+  outline: 2px solid var(--nr-teal-1);
+  outline-offset: 1px;
+}
+
 /* Venture-level decision badges (Track / Pathway / Dual-use) */
 .assessment-badge.decision-track,
 .assessment-badge.decision-pathway,
