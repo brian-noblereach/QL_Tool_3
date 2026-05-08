@@ -47,12 +47,31 @@ class SummaryView {
     if (reminder) reminder.remove();
 
     // Venture-Level Decisions controls
+    document.querySelectorAll('input[name="venture-verdict"]').forEach(r => { r.checked = false; });
     document.querySelectorAll('input[name="venture-track"]').forEach(r => { r.checked = false; });
     document.querySelectorAll('input[name="venture-pathway"]').forEach(r => { r.checked = false; });
     const dualUse = document.getElementById('venture-dual-use');
     if (dualUse) dualUse.checked = false;
     const ecosystemNotes = document.getElementById('venture-ecosystem-notes');
     if (ecosystemNotes) ecosystemNotes.value = '';
+    const institution = document.getElementById('venture-institution');
+    if (institution) institution.value = '';
+    const techDesc = document.getElementById('venture-tech-description');
+    if (techDesc) techDesc.value = '';
+    const techDomain = document.getElementById('venture-tech-domain');
+    if (techDomain) techDomain.value = '';
+    const instWarn = document.getElementById('venture-institution-warning');
+    if (instWarn) instWarn.classList.add('hidden');
+    const domWarn = document.getElementById('venture-tech-domain-warning');
+    if (domWarn) domWarn.classList.add('hidden');
+    const instHint = document.getElementById('venture-institution-hint');
+    if (instHint) instHint.classList.remove('auto-detected-hint');
+    const domHint = document.getElementById('venture-tech-domain-hint');
+    if (domHint) domHint.classList.remove('auto-detected-hint');
+
+    // Next-steps checklist
+    const nextSteps = document.getElementById('summary-next-steps');
+    if (nextSteps) nextSteps.innerHTML = '';
 
     // Summary content area
     const summaryContent = document.getElementById('summary-content');
@@ -69,6 +88,68 @@ class SummaryView {
     const sm = window.app?.stateManager;
     if (!sm) return;
 
+    // Verdict (radios)
+    const verdictRadios = document.querySelectorAll('input[name="venture-verdict"]');
+    const currentVerdict = sm.getVerdict();
+    verdictRadios.forEach(r => {
+      if (r.value === currentVerdict) r.checked = true;
+      r.addEventListener('change', () => {
+        if (r.checked) sm.saveVerdict(r.value);
+        this._refreshNextSteps();
+      });
+    });
+
+    // Institution (free text + datalist + soft-warn)
+    const institutionInput = document.getElementById('venture-institution');
+    if (institutionInput) {
+      institutionInput.value = sm.getInstitution();
+      let instTimer = null;
+      institutionInput.addEventListener('input', () => {
+        // Edits clear the auto-detected hint
+        const hint = document.getElementById('venture-institution-hint');
+        if (hint) hint.classList.remove('auto-detected-hint');
+        clearTimeout(instTimer);
+        instTimer = setTimeout(() => {
+          sm.saveInstitution(institutionInput.value);
+          this._refreshNextSteps();
+        }, 300);
+        this._updateInstitutionWarning();
+      });
+      this._updateInstitutionWarning();
+    }
+
+    // Technology Description (textarea, debounced save)
+    const techDesc = document.getElementById('venture-tech-description');
+    if (techDesc) {
+      techDesc.value = sm.getTechnologyDescription();
+      let descTimer = null;
+      techDesc.addEventListener('input', () => {
+        clearTimeout(descTimer);
+        descTimer = setTimeout(() => {
+          sm.saveTechnologyDescription(techDesc.value);
+          this._refreshNextSteps();
+        }, 300);
+      });
+    }
+
+    // Technology Domain (free text + datalist + soft-warn)
+    const techDomain = document.getElementById('venture-tech-domain');
+    if (techDomain) {
+      techDomain.value = sm.getTechnologyDomain();
+      let domTimer = null;
+      techDomain.addEventListener('input', () => {
+        const hint = document.getElementById('venture-tech-domain-hint');
+        if (hint) hint.classList.remove('auto-detected-hint');
+        clearTimeout(domTimer);
+        domTimer = setTimeout(() => {
+          sm.saveTechnologyDomain(techDomain.value);
+          this._refreshNextSteps();
+        }, 300);
+        this._updateTechDomainWarning();
+      });
+      this._updateTechDomainWarning();
+    }
+
     // Track Assignment (radios)
     const trackRadios = document.querySelectorAll('input[name="venture-track"]');
     const currentTrack = sm.getTrackAssignment();
@@ -76,6 +157,7 @@ class SummaryView {
       if (parseInt(r.value, 10) === currentTrack) r.checked = true;
       r.addEventListener('change', () => {
         if (r.checked) sm.saveTrackAssignment(parseInt(r.value, 10));
+        this._refreshNextSteps();
       });
     });
 
@@ -86,6 +168,7 @@ class SummaryView {
       if (r.value === currentPathway) r.checked = true;
       r.addEventListener('change', () => {
         if (r.checked) sm.savePathway(r.value);
+        this._refreshNextSteps();
       });
     });
 
@@ -93,7 +176,10 @@ class SummaryView {
     const dualUse = document.getElementById('venture-dual-use');
     if (dualUse) {
       dualUse.checked = sm.getDualUse();
-      dualUse.addEventListener('change', () => sm.saveDualUse(dualUse.checked));
+      dualUse.addEventListener('change', () => {
+        sm.saveDualUse(dualUse.checked);
+        this._refreshNextSteps();
+      });
     }
 
     // Local Ecosystem Activation notes (debounced save)
@@ -103,9 +189,86 @@ class SummaryView {
       let timer = null;
       notes.addEventListener('input', () => {
         clearTimeout(timer);
-        timer = setTimeout(() => sm.saveEcosystemNotes(notes.value), 300);
+        timer = setTimeout(() => {
+          sm.saveEcosystemNotes(notes.value);
+          this._refreshNextSteps();
+        }, 300);
       });
     }
+
+    // Populate institution / tech-domain datalists from proxy config based on portfolio
+    this._populateTaxonomyDatalists();
+  }
+
+  /**
+   * Pull autocomplete suggestions from the proxy config and populate the
+   * institution / tech-domain <datalist>s based on the venture's portfolio.
+   * If portfolio is unset / 'Other' / unconfigured, the lists are emptied
+   * and warnings stay quiet — pure free text.
+   */
+  async _populateTaxonomyDatalists() {
+    try {
+      const config = await StackProxy.init();
+      const portfolio = window.SmartsheetIntegration?.getPortfolio?.()
+        || window.app?.stateManager?.getState?.()?.portfolio
+        || '';
+      const instMap = config?.institutionsByPortfolio || {};
+      const domMap = config?.techDomainsByPortfolio || {};
+      this._institutionList = Array.isArray(instMap[portfolio]) ? instMap[portfolio] : [];
+      this._techDomainList = Array.isArray(domMap[portfolio]) ? domMap[portfolio] : [];
+
+      const fillDatalist = (id, values) => {
+        const dl = document.getElementById(id);
+        if (!dl) return;
+        dl.innerHTML = '';
+        values.forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v;
+          dl.appendChild(opt);
+        });
+      };
+      fillDatalist('institution-list', this._institutionList);
+      fillDatalist('tech-domain-list', this._techDomainList);
+
+      this._updateInstitutionWarning();
+      this._updateTechDomainWarning();
+    } catch (e) {
+      // Non-fatal: empty lists, no warnings.
+      this._institutionList = [];
+      this._techDomainList = [];
+    }
+  }
+
+  _updateInstitutionWarning() {
+    const input = document.getElementById('venture-institution');
+    const warning = document.getElementById('venture-institution-warning');
+    if (!input || !warning) return;
+    const list = this._institutionList || [];
+    const typed = (input.value || '').trim().toLowerCase();
+    if (!typed || list.length === 0) {
+      warning.classList.add('hidden');
+      return;
+    }
+    const match = list.some(v => v.toLowerCase() === typed);
+    warning.classList.toggle('hidden', match);
+  }
+
+  _updateTechDomainWarning() {
+    const input = document.getElementById('venture-tech-domain');
+    const warning = document.getElementById('venture-tech-domain-warning');
+    if (!input || !warning) return;
+    const list = this._techDomainList || [];
+    const typed = (input.value || '').trim().toLowerCase();
+    if (!typed || list.length === 0) {
+      warning.classList.add('hidden');
+      return;
+    }
+    const match = list.some(v => v.toLowerCase() === typed);
+    warning.classList.toggle('hidden', match);
+  }
+
+  _refreshNextSteps() {
+    if (this.data) this.renderNextSteps();
   }
 
   /**
@@ -115,13 +278,20 @@ class SummaryView {
   getVentureDecisions() {
     const sm = window.app?.stateManager;
     if (!sm) {
-      return { trackAssignment: null, pathway: null, dualUse: false, ecosystemNotes: '' };
+      return {
+        trackAssignment: null, pathway: null, dualUse: false, ecosystemNotes: '',
+        institution: '', verdict: null, technologyDescription: '', technologyDomain: ''
+      };
     }
     return {
       trackAssignment: sm.getTrackAssignment(),
       pathway: sm.getPathway(),
       dualUse: sm.getDualUse(),
-      ecosystemNotes: sm.getEcosystemNotes()
+      ecosystemNotes: sm.getEcosystemNotes(),
+      institution: sm.getInstitution(),
+      verdict: sm.getVerdict(),
+      technologyDescription: sm.getTechnologyDescription(),
+      technologyDomain: sm.getTechnologyDomain()
     };
   }
 
@@ -159,6 +329,34 @@ class SummaryView {
       const notes = document.getElementById('venture-ecosystem-notes');
       if (notes) notes.value = decisions.ecosystemNotes || '';
     }
+
+    // v3.5 fields
+    if (decisions.verdict !== undefined) {
+      sm.saveVerdict(decisions.verdict);
+      document.querySelectorAll('input[name="venture-verdict"]').forEach(r => {
+        r.checked = (r.value === decisions.verdict);
+      });
+    }
+    if (decisions.institution !== undefined) {
+      sm.saveInstitution(decisions.institution || '');
+      const inst = document.getElementById('venture-institution');
+      if (inst) inst.value = decisions.institution || '';
+      this._updateInstitutionWarning();
+    }
+    if (decisions.technologyDescription !== undefined) {
+      sm.saveTechnologyDescription(decisions.technologyDescription || '');
+      const td = document.getElementById('venture-tech-description');
+      if (td) td.value = decisions.technologyDescription || '';
+    }
+    if (decisions.technologyDomain !== undefined) {
+      sm.saveTechnologyDomain(decisions.technologyDomain || '');
+      const tdom = document.getElementById('venture-tech-domain');
+      if (tdom) tdom.value = decisions.technologyDomain || '';
+      this._updateTechDomainWarning();
+    }
+
+    // Refresh datalists in case portfolio changed before this restore
+    this._populateTaxonomyDatalists();
   }
 
   /**
@@ -544,24 +742,13 @@ class SummaryView {
           <span>${statusInfo.failedCount} assessment(s) failed. Partial results shown below.</span>
         </div>
       ` : ''}
-      
-      <div class="summary-header">
-        <div class="company-summary-info">
-          <h3>${this.escape(window.app?.getVentureName() || results.company?.company_overview?.name || 'Unknown Company')}</h3>
-          <p>${this.escape(results.company?.company_overview?.one_liner || results.company?.company_overview?.detailed_description || results.company?.company_overview?.company_description || 'No description available.')}</p>
-        </div>
-        <div class="overall-score-display">
-          <div class="overall-score-value ${this.getScoreClass(scores.overall)}">${scores.overall}</div>
-          <div class="overall-score-label">Average AI Score</div>
-          ${scores.userOverall !== '-' ? `
-            <div class="user-overall">
-              <span class="user-overall-value">${scores.userOverall}</span>
-              <span class="user-overall-label">Your Average</span>
-            </div>
-          ` : ''}
-        </div>
+
+      <div class="summary-scores-bar">
+        <span class="summary-scores-label">Your Average</span>
+        <span class="summary-scores-value ${this.getScoreClass(scores.userOverall)}">${scores.userOverall}</span>
+        <span class="summary-scores-meta">${statusInfo.submittedCount} of 6 dimensions submitted</span>
       </div>
-      
+
       <div class="summary-scores-grid">
         ${this.renderScoreCard('Researcher Aptitude', 'team', results.team)}
         ${this.renderScoreCard('Sector Funding', 'funding', results.funding)}
@@ -569,14 +756,6 @@ class SummaryView {
         ${this.renderScoreCard('Market Opportunity', 'market', results.market)}
         ${this.renderScoreCard('IP Landscape', 'iprisk', results.iprisk)}
         ${this.renderScoreCard('Solution Value', 'solutionvalue', { _userOnly: true })}
-      </div>
-      
-      <div class="summary-actions">
-        <p class="submission-status">
-          ${statusInfo.submittedCount} of 6 assessments submitted
-          ${statusInfo.submittedCount < 5 && !statusInfo.hasFailures ?
-            '<span class="status-hint">• Submit assessments in each tab before exporting</span>' : ''}
-        </p>
       </div>
     `;
 
@@ -593,6 +772,91 @@ class SummaryView {
 
     // Show/hide the final recommendation section based on submission status
     this.showRecommendationSection();
+
+    // Render the "Next steps" checklist above the summary content
+    this.renderNextSteps();
+  }
+
+  /**
+   * Render the "Next steps" checklist that lives above the Summary content.
+   * Lists every venture-level field still empty, with anchor links that scroll
+   * to the relevant section. Auto-collapses (renders empty) once everything
+   * is filled.
+   */
+  renderNextSteps() {
+    const mount = document.getElementById('summary-next-steps');
+    if (!mount) return;
+
+    const sm = window.app?.stateManager;
+    const av = window.assessmentView;
+    if (!sm) { mount.innerHTML = ''; return; }
+
+    const items = [];
+    const dimensions = ['team', 'funding', 'competitive', 'market', 'iprisk', 'solutionvalue'];
+    const unsubmitted = dimensions.filter(d => !av?.userScores?.[d]?.submitted);
+    if (unsubmitted.length > 0) {
+      items.push({
+        label: `Submit ${unsubmitted.length} dimension score${unsubmitted.length === 1 ? '' : 's'}`,
+        anchor: unsubmitted[0],   // tab name, not selector — handled below
+        kind: 'tab'
+      });
+    }
+
+    if (!sm.getVerdict()) items.push({ label: 'Pick a Verdict (Yes / Hold / No)', anchor: '#venture-decisions-section' });
+    if (!sm.getInstitution()) items.push({ label: 'Confirm Institution', anchor: '#venture-decisions-section' });
+    if (!sm.getTechnologyDescription()) items.push({ label: 'Confirm Technology Description', anchor: '#venture-decisions-section' });
+    if (!sm.getTechnologyDomain()) items.push({ label: 'Confirm Technology Domain', anchor: '#venture-decisions-section' });
+    if (!sm.getTrackAssignment()) items.push({ label: 'Pick a Track Assignment', anchor: '#venture-decisions-section' });
+    if (!sm.getPathway()) items.push({ label: 'Pick a Pathway', anchor: '#venture-decisions-section' });
+
+    const finalRec = sm.getFinalRecommendation();
+    if (!finalRec || !finalRec.trim()) {
+      items.push({ label: 'Write a Final Recommendation', anchor: '#final-recommendation-section' });
+    }
+
+    if (items.length === 0) {
+      mount.innerHTML = '';
+      return;
+    }
+
+    const links = items.map(it => {
+      if (it.kind === 'tab') {
+        return `<li><a href="#" data-tab="${it.anchor}" class="next-step-link">○ ${this.escape(it.label)}</a></li>`;
+      }
+      return `<li><a href="${it.anchor}" class="next-step-link">○ ${this.escape(it.label)}</a></li>`;
+    }).join('');
+
+    mount.innerHTML = `
+      <div class="summary-next-steps">
+        <div class="next-steps-header">
+          <strong>Next steps</strong>
+          <span class="next-steps-count">${items.length} remaining</span>
+        </div>
+        <ul class="next-steps-list">${links}</ul>
+      </div>
+    `;
+
+    mount.querySelectorAll('.next-step-link').forEach(a => {
+      a.addEventListener('click', (e) => {
+        const tab = a.dataset.tab;
+        if (tab && window.app?.tabManager) {
+          e.preventDefault();
+          window.app.tabManager.activateTab(tab);
+          return;
+        }
+        // Anchor-link path: let default scroll; add a brief flash highlight.
+        const target = a.getAttribute('href');
+        if (target?.startsWith('#')) {
+          e.preventDefault();
+          const el = document.querySelector(target);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            el.classList.add('flash-highlight');
+            setTimeout(() => el.classList.remove('flash-highlight'), 1200);
+          }
+        }
+      });
+    });
   }
 
   // Extract AI score from various data structures
@@ -687,11 +951,7 @@ class SummaryView {
       return `
         <div class="summary-score-card ${isPending ? 'pending' : 'failed'}" data-dimension="${dimension}">
           <h4>${label}</h4>
-          <div class="score-row">
-            <div class="ai-score-display">
-              <span class="score-label">AI Score</span>
-              <span class="score-value ${isPending ? 'pending' : 'failed'}">${isPending ? '...' : '—'}</span>
-            </div>
+          <div class="score-row single">
             <div class="user-score-display">
               <span class="score-label">Your Score</span>
               <span class="score-value">—</span>
@@ -704,14 +964,11 @@ class SummaryView {
       `;
     }
 
-    // Get AI score using helper (null for user-only dimensions)
-    const aiScore = isUserOnly ? null : this.getAIScore(data, dimension);
-    
     // Get user score from assessmentView
     let userScore = null;
     let isSubmitted = false;
     let justification = '';
-    
+
     if (window.assessmentView) {
       const userScoreData = window.assessmentView.userScores[dimension];
       if (userScoreData?.submitted) {
@@ -720,25 +977,18 @@ class SummaryView {
         justification = userScoreData.justification || '';
       }
     }
-    
-    const aiScoreClass = isUserOnly ? 'na' : this.getScoreClass(aiScore);
+
     const userScoreClass = this.getScoreClass(userScore);
-    const hasDeviation = !isUserOnly && isSubmitted && aiScore !== null && userScore !== null && Math.abs(aiScore - userScore) >= 2;
 
     return `
       <div class="summary-score-card ${isSubmitted ? 'submitted' : 'pending'}" data-dimension="${dimension}">
         <h4>${label}</h4>
-        <div class="score-row">
-          <div class="ai-score-display">
-            <span class="score-label">${isUserOnly ? 'AI Score' : 'AI Score'}</span>
-            <span class="score-value ${aiScoreClass}">${isUserOnly ? 'N/A' : (aiScore !== null ? aiScore : '—')}</span>
-          </div>
+        <div class="score-row single">
           <div class="user-score-display">
             <span class="score-label">Your Score</span>
             <span class="score-value ${isSubmitted ? userScoreClass : ''}">${isSubmitted ? userScore : '—'}</span>
           </div>
         </div>
-        ${hasDeviation ? `<div class="deviation-note">Differs from AI by ${Math.abs(aiScore - userScore)}</div>` : ''}
         ${isSubmitted && justification ? `
           <div class="justification-preview">
             <strong>Your rationale:</strong> ${this.escape(this.truncate(justification, 100))}

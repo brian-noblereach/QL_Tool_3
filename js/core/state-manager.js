@@ -157,7 +157,12 @@ class StateManager {
       ecosystemNotes: '',
       trackAssignment: null,    // 1 | 2 | 3 | null
       pathway: null,            // 'license' | 'company' | 'both' | null
-      dualUse: false
+      dualUse: false,
+      // v3.5 additions — captured to Smartsheet alongside the venture-level decisions
+      institution: '',          // free-text; auto-detected, advisor can edit
+      verdict: null,            // 'yes' | 'hold' | 'no' | null
+      technologyDescription: '', // free-text; auto-filled, advisor can edit
+      technologyDomain: ''      // free-text; auto-filled by AI, advisor can edit
     };
   }
 
@@ -182,9 +187,13 @@ class StateManager {
     const state = this.getState() || this.createEmptyState();
 
     state.userScores = state.userScores || {};
-    state.userScores[dimension] = scoreData;
+    // Merge so partial updates (e.g. drafting a justification) don't blow away
+    // submitted/timesSubmitted set by an earlier Submit click.
+    const existing = state.userScores[dimension] || { score: null, justification: '', submitted: false, timesSubmitted: 0 };
+    state.userScores[dimension] = { ...existing, ...scoreData };
     state.timestamp = Date.now();
     this.saveState(state);
+    this._scheduleCacheSync();
   }
 
   getUserScores() {
@@ -202,6 +211,7 @@ class StateManager {
     state.finalRecommendation = text;
     state.timestamp = Date.now();
     this.saveState(state);
+    this._scheduleCacheSync();
   }
 
   /**
@@ -223,6 +233,7 @@ class StateManager {
     state.customVentureName = name || null;
     state.timestamp = Date.now();
     this.saveState(state);
+    this._scheduleCacheSync();
   }
 
   /**
@@ -246,6 +257,7 @@ class StateManager {
     state.ecosystemNotes = text || '';
     state.timestamp = Date.now();
     this.saveState(state);
+    this._scheduleCacheSync();
   }
 
   getEcosystemNotes() {
@@ -264,6 +276,7 @@ class StateManager {
     state.trackAssignment = valid;
     state.timestamp = Date.now();
     this.saveState(state);
+    this._scheduleCacheSync();
   }
 
   getTrackAssignment() {
@@ -282,6 +295,7 @@ class StateManager {
     state.pathway = valid;
     state.timestamp = Date.now();
     this.saveState(state);
+    this._scheduleCacheSync();
   }
 
   getPathway() {
@@ -299,11 +313,129 @@ class StateManager {
     state.dualUse = !!flag;
     state.timestamp = Date.now();
     this.saveState(state);
+    this._scheduleCacheSync();
   }
 
   getDualUse() {
     const state = this.getState();
     return !!state?.dualUse;
+  }
+
+  /**
+   * Save Institution (free-text). Advisor or auto-detector populates.
+   * @param {string} value
+   */
+  saveInstitution(value) {
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
+    state.institution = (value || '').trim();
+    state.timestamp = Date.now();
+    this.saveState(state);
+    this._scheduleCacheSync();
+  }
+
+  getInstitution() {
+    const state = this.getState();
+    return state?.institution || '';
+  }
+
+  /**
+   * Save Verdict choice
+   * @param {string|null} verdict - 'yes' | 'hold' | 'no' | null
+   */
+  saveVerdict(verdict) {
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
+    const valid = ['yes', 'hold', 'no'].includes(verdict) ? verdict : null;
+    state.verdict = valid;
+    state.timestamp = Date.now();
+    this.saveState(state);
+    this._scheduleCacheSync();
+  }
+
+  getVerdict() {
+    const state = this.getState();
+    return state?.verdict ?? null;
+  }
+
+  /**
+   * Save Technology Description (free-text). Auto-filled from AI extraction; editable.
+   * @param {string} value
+   */
+  saveTechnologyDescription(value) {
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
+    state.technologyDescription = value || '';
+    state.timestamp = Date.now();
+    this.saveState(state);
+    this._scheduleCacheSync();
+  }
+
+  getTechnologyDescription() {
+    const state = this.getState();
+    return state?.technologyDescription || '';
+  }
+
+  /**
+   * Save Technology Domain (free-text). Auto-filled by AI; advisor can override.
+   * @param {string} value
+   */
+  saveTechnologyDomain(value) {
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
+    state.technologyDomain = (value || '').trim();
+    state.timestamp = Date.now();
+    this.saveState(state);
+    this._scheduleCacheSync();
+  }
+
+  getTechnologyDomain() {
+    const state = this.getState();
+    return state?.technologyDomain || '';
+  }
+
+  /**
+   * Debounced write-through from live state to the assessment cache.
+   * Without this, edits to userScores / venture decisions / final recommendation
+   * after the last cacheFullAssessment() call live only in `noblereach_qa_state`
+   * — and Load Previous reads from `noblereach_assessments`, so those edits get
+   * lost on reload. Updates only the user-input fields; AI data stays as last cached.
+   */
+  _scheduleCacheSync() {
+    if (this._cacheSyncTimer) clearTimeout(this._cacheSyncTimer);
+    this._cacheSyncTimer = setTimeout(() => {
+      this._cacheSyncTimer = null;
+      this._syncUserFieldsToCache();
+    }, 1000);
+  }
+
+  _syncUserFieldsToCache() {
+    if (!this.storageAvailable) return;
+    try {
+      const state = this.getState();
+      if (!state || !state.assessmentKey) return;
+      const cache = this.getAssessmentCache();
+      const existing = cache[state.assessmentKey];
+      // Only sync if the cache entry already exists (created by cacheFullAssessment after a phase).
+      // Otherwise we'd be writing user fields without ventureName/aiData scaffolding.
+      if (!existing) return;
+      existing.userScores = state.userScores || {};
+      existing.finalRecommendation = state.finalRecommendation || '';
+      existing.customVentureName = state.customVentureName || null;
+      existing.ecosystemNotes = state.ecosystemNotes || '';
+      existing.trackAssignment = state.trackAssignment ?? null;
+      existing.pathway = state.pathway ?? null;
+      existing.dualUse = !!state.dualUse;
+      existing.institution = state.institution || '';
+      existing.verdict = state.verdict ?? null;
+      existing.technologyDescription = state.technologyDescription || '';
+      existing.technologyDomain = state.technologyDomain || '';
+      existing.timestamp = Date.now();
+      cache[state.assessmentKey] = existing;
+      this.saveAssessmentCache(cache);
+    } catch (e) {
+      // Non-fatal: live state still has the data.
+    }
   }
 
   markComplete() {
@@ -359,7 +491,11 @@ class StateManager {
       ecosystemNotes: state.ecosystemNotes || '',
       trackAssignment: state.trackAssignment ?? null,
       pathway: state.pathway ?? null,
-      dualUse: !!state.dualUse
+      dualUse: !!state.dualUse,
+      institution: state.institution || '',
+      verdict: state.verdict ?? null,
+      technologyDescription: state.technologyDescription || '',
+      technologyDomain: state.technologyDomain || ''
     };
   }
 
@@ -472,7 +608,12 @@ class StateManager {
         ecosystemNotes: state.ecosystemNotes || '',
         trackAssignment: state.trackAssignment ?? null,
         pathway: state.pathway ?? null,
-        dualUse: !!state.dualUse
+        dualUse: !!state.dualUse,
+        // v3.5 fields
+        institution: state.institution || '',
+        verdict: state.verdict ?? null,
+        technologyDescription: state.technologyDescription || '',
+        technologyDomain: state.technologyDomain || ''
       };
 
       // Store in cache (keyed by assessment key)

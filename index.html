@@ -150,14 +150,18 @@
           <div class="form-row">
             <div class="form-group flex-1">
               <label for="sca-name">Advisor Name</label>
-              <input 
-                type="text" 
-                id="sca-name" 
-                name="sca-name" 
+              <input
+                type="text"
+                id="sca-name"
+                name="sca-name"
+                list="advisor-list"
                 placeholder="e.g., John Smith"
+                autocomplete="off"
                 required
               >
+              <datalist id="advisor-list"></datalist>
               <span class="input-hint">This will appear on the exported report</span>
+              <span id="sca-name-warning" class="input-warning hidden">This name doesn't match any known advisor &mdash; double-check spelling, or continue if you're new.</span>
             </div>
             <div class="form-group flex-1 portfolio-field">
               <label for="portfolio">Portfolio / Cohort</label>
@@ -771,6 +775,10 @@
           <div class="panel-header">
             <h2>Assessment Summary</h2>
           </div>
+
+          <!-- Next-Steps checklist (rendered by JS; hidden when complete) -->
+          <div id="summary-next-steps"></div>
+
           <div class="panel-content" id="summary-content">
             <!-- Populated by JavaScript -->
           </div>
@@ -784,7 +792,62 @@
                 </svg>
                 Venture-Level Decisions
               </h3>
-              <p class="recommendation-hint">Optional advisor judgments that apply to the venture as a whole.</p>
+              <p class="recommendation-hint">Advisor judgments that apply to the venture as a whole.</p>
+            </div>
+
+            <!-- Verdict (Yes / Hold / No) -->
+            <div class="form-group venture-verdict">
+              <label>Verdict <span class="form-required">*</span></label>
+              <div class="radio-row" role="radiogroup" aria-label="Verdict">
+                <label class="radio-option"><input type="radio" name="venture-verdict" value="yes"> Yes &mdash; continue with DD</label>
+                <label class="radio-option"><input type="radio" name="venture-verdict" value="hold"> Hold</label>
+                <label class="radio-option"><input type="radio" name="venture-verdict" value="no"> No</label>
+              </div>
+              <p class="input-hint">Your top-line decision on whether to advance this venture.</p>
+            </div>
+
+            <!-- Institution -->
+            <div class="form-group">
+              <label for="venture-institution">Institution</label>
+              <input
+                type="text"
+                id="venture-institution"
+                list="institution-list"
+                placeholder="e.g., UKY, Vanderbilt, Stanford"
+                autocomplete="off"
+                maxlength="200"
+              >
+              <datalist id="institution-list"></datalist>
+              <p class="input-hint" id="venture-institution-hint">University or organization the technology came from. Auto-detected when possible.</p>
+              <span id="venture-institution-warning" class="input-warning hidden">Not in this portfolio's known institutions &mdash; double-check or continue if new.</span>
+            </div>
+
+            <!-- Technology Description -->
+            <div class="form-group">
+              <label for="venture-tech-description">Technology Description</label>
+              <textarea
+                id="venture-tech-description"
+                rows="4"
+                placeholder="Short description of the core technology"
+                maxlength="2000"
+              ></textarea>
+              <p class="input-hint" id="venture-tech-description-hint">Auto-filled from AI extraction. Edit if needed.</p>
+            </div>
+
+            <!-- Technology Domain -->
+            <div class="form-group">
+              <label for="venture-tech-domain">Technology Domain</label>
+              <input
+                type="text"
+                id="venture-tech-domain"
+                list="tech-domain-list"
+                placeholder="e.g., Life Sciences"
+                autocomplete="off"
+                maxlength="120"
+              >
+              <datalist id="tech-domain-list"></datalist>
+              <p class="input-hint" id="venture-tech-domain-hint">Auto-filled by AI when possible.</p>
+              <span id="venture-tech-domain-warning" class="input-warning hidden">Not in this portfolio's known domains &mdash; double-check or continue if new.</span>
             </div>
 
             <!-- Track Assignment -->
@@ -903,6 +966,7 @@
   <script src="js/utils/sharepoint.js"></script>
   <script src="js/utils/smartsheet.js"></script>
   <script src="js/utils/confidence.js"></script>
+  <script src="js/utils/venture-extractors.js"></script>
   
   <!-- Config -->
   <script src="js/config/sharepoint-config.js"></script>

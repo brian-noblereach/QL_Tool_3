@@ -1490,7 +1490,12 @@ const ExportUtility = {
       (vd.trackAssignment === 1 || vd.trackAssignment === 2 || vd.trackAssignment === 3) ||
       (vd.pathway === 'license' || vd.pathway === 'company' || vd.pathway === 'both') ||
       !!vd.dualUse ||
-      (typeof vd.ecosystemNotes === 'string' && vd.ecosystemNotes.trim().length > 0)
+      (typeof vd.ecosystemNotes === 'string' && vd.ecosystemNotes.trim().length > 0) ||
+      // v3.5
+      (typeof vd.institution === 'string' && vd.institution.trim().length > 0) ||
+      (vd.verdict === 'yes' || vd.verdict === 'hold' || vd.verdict === 'no') ||
+      (typeof vd.technologyDescription === 'string' && vd.technologyDescription.trim().length > 0) ||
+      (typeof vd.technologyDomain === 'string' && vd.technologyDomain.trim().length > 0)
     );
   },
 
@@ -1532,6 +1537,22 @@ const ExportUtility = {
       y += 4;
     };
 
+    // v3.5: Verdict — show first since it's the headline decision
+    const verdictLabels = { yes: 'Yes — continue with DD', hold: 'Hold', no: 'No' };
+    if (vd.verdict && verdictLabels[vd.verdict]) {
+      writeLabelValue('Verdict:', verdictLabels[vd.verdict]);
+    }
+
+    // v3.5: Institution
+    if (typeof vd.institution === 'string' && vd.institution.trim()) {
+      writeLabelValue('Institution:', vd.institution.trim());
+    }
+
+    // v3.5: Technology Domain
+    if (typeof vd.technologyDomain === 'string' && vd.technologyDomain.trim()) {
+      writeLabelValue('Tech Domain:', vd.technologyDomain.trim());
+    }
+
     // Track
     if (vd.trackAssignment === 1 || vd.trackAssignment === 2 || vd.trackAssignment === 3) {
       writeLabelValue('Track:', trackLabels[vd.trackAssignment]);
@@ -1545,6 +1566,22 @@ const ExportUtility = {
     // Dual-use — only shown when true (absence means "no" or undecided)
     if (vd.dualUse) {
       writeLabelValue('Dual-use:', 'Yes');
+    }
+
+    // v3.5: Technology Description (free-text block)
+    if (typeof vd.technologyDescription === 'string' && vd.technologyDescription.trim()) {
+      y += 4;
+      PdfTypography.heading(doc);
+      doc.text('Technology Description', PdfLayout.marginLeft, y);
+      y += 8;
+      PdfTypography.body(doc);
+      y = PdfLayout.drawText(
+        doc,
+        vd.technologyDescription,
+        PdfLayout.marginLeft,
+        y,
+        { maxWidth: contentWidth }
+      );
     }
 
     // Local Ecosystem Activation

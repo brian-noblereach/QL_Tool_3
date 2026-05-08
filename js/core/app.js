@@ -73,6 +73,7 @@ class App {
       // Populate portfolio dropdown from proxy config (internal only)
       if (!Auth.isExternal()) {
         this.populatePortfolios();
+        this.setupAdvisorAutocomplete();
       }
 
       // Setup pilot banner
@@ -195,6 +196,19 @@ class App {
 
     // Save to state
     this.stateManager.saveCustomVentureName(name);
+
+    // Re-render the Summary tab so anything that pulls the venture name
+    // (next-steps checklist, score cards, future references) reflects the rename.
+    if (this.summaryView && this.assessmentView?.data) {
+      this.summaryView.update({
+        company: this.assessmentView.data.company,
+        team: this.assessmentView.data.team,
+        funding: this.assessmentView.data.funding,
+        competitive: this.assessmentView.data.competitive,
+        market: this.assessmentView.data.market,
+        iprisk: this.assessmentView.data.iprisk
+      });
+    }
 
     // Show confirmation
     this.toastManager.success('Venture name updated');
@@ -556,6 +570,50 @@ class App {
     }
   }
 
+  /**
+   * Populate the advisor-name <datalist> from proxy config and wire a soft
+   * warning when the typed name doesn't match any known advisor. Free text is
+   * still accepted — the warning is only a nudge against typos.
+   */
+  async setupAdvisorAutocomplete() {
+    const input = document.getElementById('sca-name');
+    const datalist = document.getElementById('advisor-list');
+    const warning = document.getElementById('sca-name-warning');
+    if (!input || !datalist) return;
+
+    let advisors = [];
+    try {
+      const config = await StackProxy.init();
+      advisors = Array.isArray(config?.advisors) ? config.advisors : [];
+    } catch (e) {
+      // Non-fatal — fall through with empty list (warning never fires)
+    }
+
+    datalist.innerHTML = '';
+    advisors.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      datalist.appendChild(opt);
+    });
+
+    const updateWarning = () => {
+      if (!warning) return;
+      const typed = (input.value || '').trim().toLowerCase();
+      // Empty input: no warning. Empty advisor list: never warn (config not loaded
+      // or no list configured).
+      if (!typed || advisors.length === 0) {
+        warning.classList.add('hidden');
+        return;
+      }
+      const match = advisors.some(a => a.toLowerCase() === typed);
+      warning.classList.toggle('hidden', match);
+    };
+
+    input.addEventListener('input', updateWarning);
+    input.addEventListener('blur', updateWarning);
+    updateWarning();
+  }
+
   setupPilotBanner() {
     const closeBtn = document.getElementById('pilot-close');
     const feedbackBtn = document.getElementById('feedback-btn');
@@ -742,6 +800,10 @@ class App {
         this.setVentureNameDisplay(companyData?.company_overview?.name);
         // Refresh Solution Value evidence
         this.assessmentView.loadSolutionValueEvidence();
+        // v3.5: derive venture-level fields from the AI extraction
+        this._populateAutoDetectedVentureFields(companyData).catch(err => {
+          console.warn('[App] Auto-detection of venture fields failed:', err?.message);
+        });
         break;
       case 'team':
         this.assessmentView.loadTeamData(data);
@@ -777,6 +839,72 @@ class App {
         market: this.assessmentView.data.market,
         iprisk: this.assessmentView.data.iprisk
       });
+    }
+  }
+
+  /**
+   * Auto-populate Institution / Technology Description / Technology Domain from
+   * the company extraction. Only writes a field if it's currently empty —
+   * advisor edits are never overwritten. Runs after company phase completes.
+   */
+  async _populateAutoDetectedVentureFields(companyData) {
+    if (!companyData || !window.VentureExtractors || !this.stateManager) return;
+
+    let candidates = [];
+    try {
+      const config = await StackProxy.init();
+      const portfolio = window.SmartsheetIntegration?.getPortfolio?.()
+        || this.stateManager.getState?.()?.portfolio
+        || '';
+      const map = config?.institutionsByPortfolio || {};
+      candidates = Array.isArray(map[portfolio]) ? map[portfolio] : [];
+    } catch (e) {
+      // Fall through with empty candidate list — detector will return ''
+    }
+
+    const url = this.stateManager.getCompanyInput()?.url || '';
+
+    // Institution
+    if (!this.stateManager.getInstitution()) {
+      const detected = window.VentureExtractors.detectInstitution(url, companyData, candidates);
+      if (detected) {
+        this.stateManager.saveInstitution(detected);
+        const input = document.getElementById('venture-institution');
+        if (input) input.value = detected;
+        const hint = document.getElementById('venture-institution-hint');
+        if (hint) hint.classList.add('auto-detected-hint');
+      }
+    }
+
+    // Technology Description
+    if (!this.stateManager.getTechnologyDescription()) {
+      const desc = window.VentureExtractors.deriveTechnologyDescription(companyData);
+      if (desc) {
+        this.stateManager.saveTechnologyDescription(desc);
+        const td = document.getElementById('venture-tech-description');
+        if (td) td.value = desc;
+        const hint = document.getElementById('venture-tech-description-hint');
+        if (hint) hint.classList.add('auto-detected-hint');
+      }
+    }
+
+    // Technology Domain
+    if (!this.stateManager.getTechnologyDomain()) {
+      const domain = window.VentureExtractors.extractTechnologyDomain(companyData);
+      if (domain) {
+        this.stateManager.saveTechnologyDomain(domain);
+        const tdom = document.getElementById('venture-tech-domain');
+        if (tdom) tdom.value = domain;
+        const hint = document.getElementById('venture-tech-domain-hint');
+        if (hint) hint.classList.add('auto-detected-hint');
+      }
+    }
+
+    // Refresh next-steps + warnings now that fields may be populated
+    if (window.summaryView) {
+      window.summaryView._updateInstitutionWarning?.();
+      window.summaryView._updateTechDomainWarning?.();
+      window.summaryView.renderNextSteps?.();
     }
   }
 
@@ -1675,7 +1803,12 @@ class App {
           ecosystemNotes: rowData.ecosystemNotes || '',
           trackAssignment: rowData.trackAssignment != null ? Number(rowData.trackAssignment) : null,
           pathway: rowData.pathway || null,
-          dualUse: !!rowData.dualUse
+          dualUse: !!rowData.dualUse,
+          // v3.5 fields from Smartsheet row (if present)
+          institution: rowData.institution || '',
+          verdict: rowData.verdict || null,
+          technologyDescription: rowData.technologyDescription || '',
+          technologyDomain: rowData.technologyDomain || ''
         };
 
         // Map Smartsheet fields back to userScores
@@ -1954,7 +2087,12 @@ class App {
       trackAssignment: assessment.trackAssignment,
       pathway: assessment.pathway,
       dualUse: assessment.dualUse,
-      ecosystemNotes: assessment.ecosystemNotes
+      ecosystemNotes: assessment.ecosystemNotes,
+      // v3.5 fields
+      verdict: assessment.verdict,
+      institution: assessment.institution,
+      technologyDescription: assessment.technologyDescription,
+      technologyDomain: assessment.technologyDomain
     });
   }
 

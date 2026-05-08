@@ -45,7 +45,31 @@ class AssessmentView {
     this.setupSliders();
     this.setupViewToggles();
     this.setupSubmitButtons();
+    this.setupJustificationAutoSave();
     console.log('AssessmentView initialized');
+  }
+
+  /**
+   * Debounced auto-save of justification textareas. Without this, draft text
+   * the advisor types but doesn't Submit is lost on Load Previous.
+   */
+  setupJustificationAutoSave() {
+    const dimensions = ['team', 'funding', 'competitive', 'market', 'iprisk', 'solutionvalue'];
+    this._justTimers = this._justTimers || {};
+    dimensions.forEach(dim => {
+      const el = document.getElementById(`${dim}-justification`);
+      if (!el) return;
+      el.addEventListener('input', () => {
+        const text = el.value;
+        this.userScores[dim].justification = text;
+        clearTimeout(this._justTimers[dim]);
+        this._justTimers[dim] = setTimeout(() => {
+          if (window.app?.stateManager) {
+            window.app.stateManager.saveUserScore(dim, { justification: text });
+          }
+        }, 300);
+      });
+    });
   }
 
   /**
@@ -362,7 +386,12 @@ class AssessmentView {
     // (removed the disabling code)
     
     if (window.app?.stateManager) {
-      window.app.stateManager.saveUserScore(dimension, { score, justification });
+      window.app.stateManager.saveUserScore(dimension, {
+        score,
+        justification,
+        submitted: true,
+        timesSubmitted: this.userScores[dimension].timesSubmitted
+      });
     }
     if (window.app?.toastManager) {
       window.app.toastManager.success(`${this.capitalize(dimension)} assessment ${isUpdate ? 'updated' : 'submitted'}`);
@@ -2326,7 +2355,12 @@ class AssessmentView {
       trackAssignment: sm.getTrackAssignment(),
       pathway:         sm.getPathway(),
       dualUse:         sm.getDualUse(),
-      ecosystemNotes:  sm.getEcosystemNotes()
+      ecosystemNotes:  sm.getEcosystemNotes(),
+      // v3.5
+      institution:           sm.getInstitution(),
+      verdict:               sm.getVerdict(),
+      technologyDescription: sm.getTechnologyDescription(),
+      technologyDomain:      sm.getTechnologyDomain()
     } : null;
 
     return {

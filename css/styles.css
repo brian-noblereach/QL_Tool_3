@@ -527,6 +527,26 @@ body {
   color: var(--slate-500);
 }
 
+/* Soft mismatch warning for advisor / institution / tech-domain inputs */
+.input-warning {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--brand-warning, #d97706);
+}
+
+/* Auto-detected hint badge — slightly emphasized to draw the eye */
+.auto-detected-hint {
+  font-size: 12px;
+  color: var(--brand-success, #059669);
+  font-weight: 500;
+}
+
+.form-required {
+  color: var(--brand-error, #dc2626);
+  font-weight: 600;
+}
+
 .form-actions {
   display: flex;
   justify-content: center;
@@ -1590,11 +1610,22 @@ body {
 
 /* ---------- Final Recommendation Styles ---------- */
 .final-recommendation {
-  margin-top: 24px;
-  padding: 20px;
+  margin-top: 16px;
+  padding: 14px 16px;
   background: white;
   border-radius: 8px;
   border: 1px solid var(--slate-200);
+  border-left: 4px solid var(--nr-teal-1);
+}
+
+.final-recommendation .recommendation-header h3 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.final-recommendation .recommendation-hint {
+  margin: 2px 0 8px 0;
+  font-size: 12px;
 }
 
 .final-recommendation.hidden {
@@ -1671,15 +1702,143 @@ body {
 
 /* ---------- Venture-Level Decisions Card ---------- */
 .venture-decisions-card {
-  margin-top: 24px;
-  padding: 20px;
+  margin-top: 16px;
+  padding: 14px 16px;
   background: white;
   border-radius: 8px;
   border: 1px solid var(--slate-200);
+  border-left: 4px solid var(--nr-teal-1);
+}
+
+.venture-decisions-card .recommendation-header {
+  margin-bottom: 8px;
+}
+
+.venture-decisions-card .recommendation-header h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.venture-decisions-card .recommendation-hint {
+  margin: 2px 0 8px 0;
+  font-size: 12px;
+}
+
+/* Verdict block sits at the top of the card and is the most prominent decision */
+.venture-decisions-card .venture-verdict {
+  background: var(--slate-50);
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--slate-200);
+}
+
+.venture-decisions-card .venture-verdict > label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* Compact "Your Average" bar replaces the old summary header block */
+.summary-scores-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 0 12px 0;
+  padding: 8px 12px;
+  background: var(--slate-50);
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+}
+
+.summary-scores-label {
+  font-size: 12px;
+  color: var(--slate-500);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-scores-value {
+  font-family: 'Clash Display', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.summary-scores-value.low { color: var(--score-low); }
+.summary-scores-value.medium { color: var(--score-medium); }
+.summary-scores-value.high { color: var(--score-high); }
+
+.summary-scores-meta {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--slate-500);
+}
+
+/* ---------- Summary Tab "Next Steps" Checklist ---------- */
+.summary-next-steps {
+  margin: 0 0 14px 0;
+  padding: 8px 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.next-steps-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+  color: var(--slate-700);
+}
+
+.next-steps-header strong {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.next-steps-count {
+  font-size: 11px;
+  color: var(--slate-500);
+}
+
+.next-steps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  column-gap: 16px;
+  row-gap: 1px;
+}
+
+.next-steps-list li {
+  padding: 0;
+  line-height: 1.5;
+}
+
+.next-step-link {
+  color: var(--slate-700);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.next-step-link:hover {
+  color: var(--nr-teal-1);
+  text-decoration: underline;
+}
+
+/* Brief flash highlight when a next-step link scrolls to its target */
+.flash-highlight {
+  animation: flash-highlight 1.2s ease-out;
+}
+
+@keyframes flash-highlight {
+  0% { box-shadow: 0 0 0 4px rgba(253, 224, 71, 0.6); }
+  100% { box-shadow: 0 0 0 4px rgba(253, 224, 71, 0); }
 }
 
 .venture-decisions-card .form-group {
-  margin-bottom: 18px;
+  margin-bottom: 10px;
 }
 
 .venture-decisions-card .form-group:last-child {
@@ -1691,21 +1850,45 @@ body {
   font-size: 13px;
   font-weight: 600;
   color: var(--slate-700);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
-.venture-decisions-card textarea {
+.venture-decisions-card .input-hint {
+  margin-top: 2px;
+  margin-bottom: 0;
+}
+
+.venture-decisions-card input[type="text"] {
   width: 100%;
-  padding: 12px;
+  padding: 8px 10px;
   border: 1px solid var(--slate-300);
   border-radius: 6px;
   font-family: inherit;
   font-size: 14px;
-  line-height: 1.5;
-  resize: vertical;
-  min-height: 100px;
   box-sizing: border-box;
 }
+
+.venture-decisions-card input[type="text"]:focus {
+  outline: none;
+  border-color: var(--nr-teal-1);
+  box-shadow: 0 0 0 3px rgba(0, 128, 128, 0.1);
+}
+
+.venture-decisions-card textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--slate-300);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  resize: vertical;
+  min-height: 64px;
+  box-sizing: border-box;
+}
+
+#venture-tech-description { min-height: 56px; }
+#venture-ecosystem-notes { min-height: 72px; }
 
 .venture-decisions-card textarea:focus {
   outline: none;
@@ -1755,8 +1938,8 @@ body {
 
 /* ---------- Database Sync Section ---------- */
 .database-sync-section {
-  margin-top: 24px;
-  padding: 20px;
+  margin-top: 16px;
+  padding: 12px 16px;
   background: var(--slate-50);
   border-radius: 8px;
   border: 1px solid var(--slate-200);
@@ -1766,10 +1949,15 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 8px 0;
-  font-size: 16px;
+  margin: 0 0 4px 0;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--slate-800);
+  color: var(--slate-700);
+}
+
+.sync-header h3 svg {
+  width: 16px;
+  height: 16px;
 }
 
 .sync-header h3 svg {

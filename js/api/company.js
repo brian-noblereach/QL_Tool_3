@@ -360,7 +360,8 @@ const CompanyAPI = {
         company_stage: 'unknown',
         one_liner: '',
         detailed_description: '',
-        downstream_summary: ''
+        downstream_summary: '',
+        technology_domain: ''
       },
       technology: {
         core_technology: '',

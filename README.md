@@ -2,7 +2,7 @@
 
 An AI-powered due diligence tool for evaluating deep-tech ventures and pre-company research projects.
 
-![Version](https://img.shields.io/badge/version-3.4-blue)
+![Version](https://img.shields.io/badge/version-3.5-blue)
 ![Status](https://img.shields.io/badge/status-pilot-orange)
 
 ---
@@ -94,6 +94,7 @@ The Venture Assessment Platform automates initial qualification of deep-tech ven
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 3.5 | May 2026 | **Bug fix**: justification text now persists on every keystroke, so drafts survive Load Previous (earlier versions only saved on Submit). **UX**: AI scores hidden on the Summary tab; new "Next steps" checklist above the Summary content shows what's still missing with anchor links and flash highlight. **Bug fix**: advisor-name input gets autocomplete + soft warning on typos, sourced from the proxy config. **Feature**: four new Smartsheet fields — Verdict (Yes/Hold/No), Institution, Technology Description, Technology Domain. Institution and Technology Domain are free text with portfolio-scoped autocomplete suggestions served by the proxy (extend by editing one block in `Code.gs` — no client release). Institution is auto-detected from URL + AI affiliations; Technology Description is auto-derived from the AI extraction; Technology Domain comes from a new AI classification step in the Venture Info workflow that prefers a 5-term taxonomy and may invent a new short label when nothing fits. All four round-trip through state, cache, Smartsheet, and PDF export. Smartsheet Institution and Technology Domain columns must be changed from Dropdown → Text before deploy. |
 | 3.4 | May 2026 | Load Previous reliability: file-only assessments no longer overwrite each other (every analysis now gets a unique cache key, fixing a bug where multiple file uploads by the same advisor collapsed onto a single `documentupload_<advisor>` slot). Cache-management controls added: per-row delete and "Clear all" in the Load Previous modal, plus automatic 90-day expiration of stale entries. Beforeunload prompt reworded to explicitly mention unsubmitted-to-Smartsheet scores instead of generic "unsaved work" |
 | 3.3 | May 2026 | Solution Value tab redesigned around the human rubric: rubric-aligned `solution_value` schema (beachhead customer, unmet-need gap type, quantified benefit magnitudes with evidence-quality flags, ranked stakeholders), four-section tab layout (Unmet Need / Who Feels It Most / Magnitude of Benefit / Related Evidence), PDF export and scoring guidance updated to match. Progress-bar timings recalibrated for current Stack AI run times (~7 min typical, ~8 min worst-case); clearer file-upload error messages |
 | 3.2 | Apr 2026 | Venture-Level Advisor Decisions on Summary tab: Local Ecosystem Activation, Track Assignment, Pathway, Dual-Use flag — round-tripped through Smartsheet, cache, and PDF |

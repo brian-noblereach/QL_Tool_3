@@ -509,6 +509,20 @@ const SmartsheetIntegration = {
       payload.dualUse = !!context.dualUse;
     }
 
+    // v3.5 fields
+    if (context.institution !== undefined) {
+      payload.institution = context.institution || '';
+    }
+    if (context.verdict !== undefined && context.verdict !== null) {
+      payload.verdict = context.verdict;
+    }
+    if (context.technologyDescription !== undefined) {
+      payload.technologyDescription = context.technologyDescription || '';
+    }
+    if (context.technologyDomain !== undefined) {
+      payload.technologyDomain = context.technologyDomain || '';
+    }
+
     return payload;
   },
 
@@ -558,7 +572,12 @@ const SmartsheetIntegration = {
       ecosystemNotes:   sm ? sm.getEcosystemNotes()   : '',
       trackAssignment:  sm ? sm.getTrackAssignment()  : null,
       pathway:          sm ? sm.getPathway()          : null,
-      dualUse:          sm ? sm.getDualUse()          : false
+      dualUse:          sm ? sm.getDualUse()          : false,
+      // v3.5 fields
+      institution:           sm ? sm.getInstitution()           : '',
+      verdict:               sm ? sm.getVerdict()               : null,
+      technologyDescription: sm ? sm.getTechnologyDescription() : '',
+      technologyDomain:      sm ? sm.getTechnologyDomain()      : ''
     };
   },
 
