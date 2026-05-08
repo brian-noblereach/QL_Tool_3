@@ -106,6 +106,16 @@ const CompanyAPI = {
     Debug.log('[CompanyAPI] Parsed full output');
 
     if (!fullOutput) {
+      // Distinguish refusal/truncation from a generic parse failure so the
+      // pipeline can auto-retry and the user gets an actionable message.
+      const rawText = (typeof rawOutput === 'string')
+        ? rawOutput
+        : (rawOutput?.text || JSON.stringify(rawOutput || ''));
+      if (this._looksLikeRefusalOrTruncation(rawText)) {
+        const err = new Error('AI returned an incomplete response (likely a content-moderation interruption or truncation). Re-runs are usually successful since the model output varies.');
+        err.code = 'incomplete_llm_response';
+        throw err;
+      }
       throw new Error('Failed to parse company data');
     }
 
@@ -121,6 +131,41 @@ const CompanyAPI = {
     Debug.log('[CompanyAPI] Processing complete:', full.company_overview?.name || 'Unknown');
 
     return { full, short };
+  },
+
+  /**
+   * Detect Stack AI / LLM responses where the model started producing valid
+   * JSON and then either (a) tripped a content-moderation refusal mid-stream
+   * or (b) was truncated. Both cases produce a malformed JSON string that
+   * cannot be parsed. Re-running the workflow usually succeeds because the
+   * model's output is non-deterministic.
+   * @param {string} text - Raw response text after JSON.parse failed
+   * @returns {boolean}
+   */
+  _looksLikeRefusalOrTruncation(text) {
+    if (typeof text !== 'string' || !text.trim()) return false;
+    const lower = text.toLowerCase();
+    // Common assistant-refusal phrases that appear when content moderation
+    // interrupts JSON generation.
+    const REFUSAL_MARKERS = [
+      "i'm sorry, but i cannot",
+      'i cannot assist with that',
+      "i can't assist with that",
+      'i cannot help with that',
+      "i can't help with that",
+      'i am unable to provide',
+      'i am not able to provide'
+    ];
+    if (REFUSAL_MARKERS.some(m => lower.includes(m))) return true;
+
+    // Truncation heuristic: unterminated quote / unbalanced braces. Cheap
+    // approximation — count quote chars (excluding escaped) and braces.
+    const trimmed = text.trim();
+    const opens = (trimmed.match(/\{/g) || []).length;
+    const closes = (trimmed.match(/\}/g) || []).length;
+    if (opens > 0 && opens > closes) return true;
+
+    return false;
   },
 
   /**

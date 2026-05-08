@@ -260,9 +260,12 @@ class AnalysisPipeline {
         try {
           result = await callPhaseApi();
         } catch (firstError) {
-          // Auto-retry once if the error is a token/context limit issue
-          if (this._isTokenLimitError(firstError)) {
-            Debug.log(`[Pipeline] Token limit error in ${phase.key}, auto-retrying...`);
+          // Auto-retry once for transient LLM issues — token-limit errors and
+          // incomplete responses (content-moderation refusals or stream
+          // truncation). Both classes are non-deterministic and usually succeed
+          // on a second attempt because the model's output varies.
+          if (this._isTokenLimitError(firstError) || this._isIncompleteResponseError(firstError)) {
+            Debug.log(`[Pipeline] Transient LLM error in ${phase.key} (${firstError.code || 'token_limit'}), auto-retrying...`);
             this.emit('phaseAutoRetry', {
               phase: phase.key,
               name: phase.name
@@ -295,10 +298,13 @@ class AnalysisPipeline {
         phase.error = error;
         phase.endTime = Date.now();
 
-        // Replace raw token limit errors with a user-friendly message
-        const friendlyMessage = this._isTokenLimitError(error)
-          ? `${phase.name} failed: the website content was too large to process. Click Retry to try again.`
-          : error.message;
+        // Replace raw transient LLM errors with user-friendly messages.
+        let friendlyMessage = error.message;
+        if (this._isTokenLimitError(error)) {
+          friendlyMessage = `${phase.name} failed: the website content was too large to process. Click Retry to try again.`;
+        } else if (this._isIncompleteResponseError(error)) {
+          friendlyMessage = `${phase.name} got an incomplete response from the AI (often a content-moderation interruption on sensitive topics). Click Retry — re-runs usually succeed.`;
+        }
 
         this.emit('phaseError', {
           phase: phase.key,
@@ -367,6 +373,20 @@ class AnalysisPipeline {
         || msg.includes('context_length_exceeded')
         || msg.includes('context length')
         || (msg.includes('input') && msg.includes('too long'));
+  }
+
+  /**
+   * Check if an error is a content-moderation refusal or truncated LLM
+   * response (CompanyAPI throws with code='incomplete_llm_response'). These
+   * are non-deterministic; a re-run typically produces a complete response.
+   * @param {Error} error
+   * @returns {boolean}
+   */
+  _isIncompleteResponseError(error) {
+    if (!error) return false;
+    if (error.code === 'incomplete_llm_response') return true;
+    if (typeof error.message === 'string' && error.message.toLowerCase().includes('incomplete response')) return true;
+    return false;
   }
 
   /**
