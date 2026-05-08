@@ -571,9 +571,9 @@ class App {
   }
 
   /**
-   * Populate the advisor-name <datalist> from proxy config and wire a soft
-   * warning when the typed name doesn't match any known advisor. Free text is
-   * still accepted — the warning is only a nudge against typos.
+   * Wire advisor-name autocomplete + soft-warn. The datalist is populated only
+   * after the user starts typing, so clicking the field doesn't dump the full
+   * advisor list — options narrow as the user types.
    */
   async setupAdvisorAutocomplete() {
     const input = document.getElementById('sca-name');
@@ -589,29 +589,35 @@ class App {
       // Non-fatal — fall through with empty list (warning never fires)
     }
 
-    datalist.innerHTML = '';
-    advisors.forEach(name => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      datalist.appendChild(opt);
-    });
+    const refresh = () => {
+      const typed = (input.value || '').trim();
+      const lower = typed.toLowerCase();
 
-    const updateWarning = () => {
+      // Populate datalist only once the user has typed something — keeps the
+      // dropdown from auto-opening with the full list on focus.
+      datalist.innerHTML = '';
+      if (typed) {
+        advisors
+          .filter(a => a.toLowerCase().includes(lower))
+          .forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            datalist.appendChild(opt);
+          });
+      }
+
       if (!warning) return;
-      const typed = (input.value || '').trim().toLowerCase();
-      // Empty input: no warning. Empty advisor list: never warn (config not loaded
-      // or no list configured).
       if (!typed || advisors.length === 0) {
         warning.classList.add('hidden');
         return;
       }
-      const match = advisors.some(a => a.toLowerCase() === typed);
+      const match = advisors.some(a => a.toLowerCase() === lower);
       warning.classList.toggle('hidden', match);
     };
 
-    input.addEventListener('input', updateWarning);
-    input.addEventListener('blur', updateWarning);
-    updateWarning();
+    input.addEventListener('input', refresh);
+    input.addEventListener('blur', refresh);
+    refresh();
   }
 
   setupPilotBanner() {

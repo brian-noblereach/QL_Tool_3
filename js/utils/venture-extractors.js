@@ -3,54 +3,104 @@
 // Technology Domain) from the AI-extracted company JSON and the input URL.
 // Pure functions — no DOM access, no global state writes.
 
+// Synonyms used by the institution detector so a candidate like 'UKY' can be
+// matched even when the AI text writes 'University of Kentucky'. The candidate
+// (the canonical name shown in the dropdown) is the key. Each entry's terms are
+// case-insensitively substring-matched against the AI text. Lowercase only.
+const INSTITUTION_ALIASES = {
+  'UKY':          ['university of kentucky', 'uky'],
+  'Vandy':        ['vanderbilt'],
+  'UoL':          ['university of louisville', 'u of l', 'uofl'],
+  'UTK':          ['university of tennessee', 'utk'],
+  'UCF':          ['university of central florida', 'ucf'],
+  'UF':           ['university of florida'],
+  'USF':          ['university of south florida', 'usf'],
+  'Embry Riddle': ['embry riddle', 'embry-riddle']
+};
+
 const VentureExtractors = {
   /**
-   * Try to identify the source institution. Strategy:
-   *   1. Match the venture URL against a known-domain map.
-   *   2. If candidate list provided, scan team affiliations and downstream_summary
-   *      for a case-insensitive substring match.
-   * Returns the canonical candidate string, or '' if no match.
+   * Identify the source institution. Strategy (first hit wins):
+   *   1. AI's structured `company_overview.institution` field — works for any portfolio
+   *      (requires Stack AI redeploy of the v3.5 Venture Info schema/prompt).
+   *   2. URL-domain map (uky.edu, vanderbilt.edu, etc.) when the URL matches a known
+   *      academic domain; URL hit is normalized to the canonical candidate spelling
+   *      when the candidate list contains it.
+   *   3. Substring scan of team affiliations / headquarters / downstream_summary against
+   *      each candidate plus its aliases (so "UKY" can match "University of Kentucky").
+   *
+   * Returns '' when nothing fires.
    *
    * @param {string} url - Venture URL (may be empty for file-only runs)
    * @param {Object} companyData - The AI-extracted company JSON (full output)
-   * @param {string[]} candidates - Allowed institution names for the venture's portfolio
+   * @param {string[]} candidates - Allowed institution names for the venture's portfolio (may be empty)
    * @returns {string}
    */
   detectInstitution(url, companyData, candidates) {
-    if (!Array.isArray(candidates) || candidates.length === 0) return '';
-
+    candidates = Array.isArray(candidates) ? candidates : [];
     const candidateMap = new Map(candidates.map(c => [c.toLowerCase(), c]));
+
+    // 1. Trust the AI-extracted structured field (any portfolio).
+    if (companyData && typeof companyData === 'object') {
+      const aiInstitution = companyData.company_overview?.institution;
+      if (typeof aiInstitution === 'string' && aiInstitution.trim()) {
+        const trimmed = aiInstitution.trim();
+        // If the AI value matches a candidate by alias, snap to the canonical spelling.
+        const lower = trimmed.toLowerCase();
+        const direct = candidateMap.get(lower);
+        if (direct) return direct;
+        for (const c of candidates) {
+          const aliases = INSTITUTION_ALIASES[c] || [];
+          if (aliases.some(a => lower.includes(a))) return c;
+        }
+        return trimmed;
+      }
+    }
+
+    // 2. URL-domain fallback. Recognized academic domains map to a canonical name.
     const URL_DOMAIN_MAP = {
-      'uky.edu': 'UKY',
-      'vanderbilt.edu': 'Vandy',
-      'louisville.edu': 'UoL',
-      'utk.edu': 'UTK',
-      'ucf.edu': 'UCF',
-      'ufl.edu': 'UF',
-      'usf.edu': 'USF',
-      'erau.edu': 'Embry Riddle'
+      'uky.edu':          'UKY',
+      'vanderbilt.edu':   'Vandy',
+      'louisville.edu':   'UoL',
+      'utk.edu':          'UTK',
+      'ucf.edu':          'UCF',
+      'ufl.edu':          'UF',
+      'usf.edu':          'USF',
+      'erau.edu':         'Embry Riddle',
+      'psu.edu':          'Pennsylvania State University',
+      'northeastern.edu': 'Northeastern University',
+      'mit.edu':          'Massachusetts Institute of Technology',
+      'stanford.edu':     'Stanford University',
+      'berkeley.edu':     'University of California, Berkeley',
+      'harvard.edu':      'Harvard University',
+      'cmu.edu':          'Carnegie Mellon University'
     };
 
     if (url) {
       const lower = url.toLowerCase();
       for (const [domain, name] of Object.entries(URL_DOMAIN_MAP)) {
-        if (lower.includes(domain) && candidateMap.has(name.toLowerCase())) {
-          return candidateMap.get(name.toLowerCase());
+        if (lower.includes(domain)) {
+          // Prefer canonical spelling from candidate list when available
+          return candidateMap.get(name.toLowerCase()) || name;
         }
       }
     }
 
-    if (companyData && typeof companyData === 'object') {
+    // 3. Substring scan against the portfolio candidate list (alias-aware).
+    if (candidates.length > 0 && companyData && typeof companyData === 'object') {
       const haystack = [
         companyData.company_overview?.downstream_summary || '',
         companyData.company_overview?.detailed_description || '',
         companyData.company_overview?.headquarters || '',
+        companyData.company_overview?.one_liner || '',
         ...(companyData.team?.founders || []).map(f => `${f.background || ''} ${f.title || ''}`)
       ].join(' ').toLowerCase();
 
       if (haystack) {
         for (const c of candidates) {
-          if (haystack.includes(c.toLowerCase())) return c;
+          // Try the canonical name itself first, then each alias.
+          const terms = [c.toLowerCase(), ...(INSTITUTION_ALIASES[c] || [])];
+          if (terms.some(t => haystack.includes(t))) return c;
         }
       }
     }

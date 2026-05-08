@@ -108,6 +108,8 @@ class SummaryView {
         // Edits clear the auto-detected hint
         const hint = document.getElementById('venture-institution-hint');
         if (hint) hint.classList.remove('auto-detected-hint');
+        // Refill datalist with options matching what the user typed
+        this._refreshSuggestionDatalist('institution-list', institutionInput.value, this._institutionList);
         clearTimeout(instTimer);
         instTimer = setTimeout(() => {
           sm.saveInstitution(institutionInput.value);
@@ -140,6 +142,8 @@ class SummaryView {
       techDomain.addEventListener('input', () => {
         const hint = document.getElementById('venture-tech-domain-hint');
         if (hint) hint.classList.remove('auto-detected-hint');
+        // Refill datalist with options matching what the user typed
+        this._refreshSuggestionDatalist('tech-domain-list', techDomain.value, this._techDomainList);
         clearTimeout(domTimer);
         domTimer = setTimeout(() => {
           sm.saveTechnologyDomain(techDomain.value);
@@ -201,10 +205,11 @@ class SummaryView {
   }
 
   /**
-   * Pull autocomplete suggestions from the proxy config and populate the
-   * institution / tech-domain <datalist>s based on the venture's portfolio.
-   * If portfolio is unset / 'Other' / unconfigured, the lists are emptied
-   * and warnings stay quiet — pure free text.
+   * Pull autocomplete sources from the proxy config based on the venture's portfolio.
+   * Suggestions are kept in memory; the actual <datalist> is populated only as the
+   * user types into the input (see _refreshSuggestionDatalist) so clicking the
+   * field doesn't auto-drop the full list. If portfolio is unset / 'Other' /
+   * unconfigured, the lists are empty and warnings stay quiet — pure free text.
    */
   async _populateTaxonomyDatalists() {
     try {
@@ -217,18 +222,9 @@ class SummaryView {
       this._institutionList = Array.isArray(instMap[portfolio]) ? instMap[portfolio] : [];
       this._techDomainList = Array.isArray(domMap[portfolio]) ? domMap[portfolio] : [];
 
-      const fillDatalist = (id, values) => {
-        const dl = document.getElementById(id);
-        if (!dl) return;
-        dl.innerHTML = '';
-        values.forEach(v => {
-          const opt = document.createElement('option');
-          opt.value = v;
-          dl.appendChild(opt);
-        });
-      };
-      fillDatalist('institution-list', this._institutionList);
-      fillDatalist('tech-domain-list', this._techDomainList);
+      // Datalists start empty and fill on type via _refreshSuggestionDatalist.
+      this._refreshSuggestionDatalist('institution-list', '', this._institutionList);
+      this._refreshSuggestionDatalist('tech-domain-list', '', this._techDomainList);
 
       this._updateInstitutionWarning();
       this._updateTechDomainWarning();
@@ -237,6 +233,26 @@ class SummaryView {
       this._institutionList = [];
       this._techDomainList = [];
     }
+  }
+
+  /**
+   * Populate a <datalist> with options that contain the typed string. Empty
+   * `typed` clears the datalist — keeps the browser from auto-dropping the full
+   * list when the user just clicks into the input.
+   */
+  _refreshSuggestionDatalist(datalistId, typed, source) {
+    const dl = document.getElementById(datalistId);
+    if (!dl) return;
+    dl.innerHTML = '';
+    if (!typed || !Array.isArray(source) || source.length === 0) return;
+    const lower = typed.toLowerCase();
+    source
+      .filter(v => v.toLowerCase().includes(lower))
+      .forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v;
+        dl.appendChild(opt);
+      });
   }
 
   _updateInstitutionWarning() {

@@ -361,7 +361,8 @@ const CompanyAPI = {
         one_liner: '',
         detailed_description: '',
         downstream_summary: '',
-        technology_domain: ''
+        technology_domain: '',
+        institution: ''
       },
       technology: {
         core_technology: '',
