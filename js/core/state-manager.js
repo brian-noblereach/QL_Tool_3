@@ -395,6 +395,28 @@ class StateManager {
   }
 
   /**
+   * Wipe all venture-level advisor decisions from state in one write.
+   * Called when starting a new analysis so the prior venture's verdict /
+   * institution / track / pathway / dual-use / ecosystem notes / tech
+   * description / tech domain don't bleed into the new one.
+   */
+  clearVentureDecisions() {
+    if (!this.storageAvailable) return;
+    const state = this.getState() || this.createEmptyState();
+    state.verdict = null;
+    state.institution = '';
+    state.technologyDescription = '';
+    state.technologyDomain = '';
+    state.trackAssignment = null;
+    state.pathway = null;
+    state.dualUse = false;
+    state.ecosystemNotes = '';
+    state.timestamp = Date.now();
+    this.saveState(state);
+    this._scheduleCacheSync();
+  }
+
+  /**
    * Debounced write-through from live state to the assessment cache.
    * Without this, edits to userScores / venture decisions / final recommendation
    * after the last cacheFullAssessment() call live only in `noblereach_qa_state`

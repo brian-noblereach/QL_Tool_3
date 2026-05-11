@@ -713,6 +713,14 @@ class App {
     const recTextarea = document.getElementById('final-recommendation-text');
     if (recTextarea) recTextarea.value = '';
 
+    // Clear venture-level advisor decisions so the prior venture's verdict,
+    // institution, tech description/domain, track, pathway, dual-use, and
+    // ecosystem notes don't bleed into the new analysis. Auto-detection during
+    // the Company phase will repopulate institution / tech description / tech
+    // domain when appropriate.
+    this.stateManager.clearVentureDecisions();
+    this.summaryView.reset();
+
     // Request notification permission
     await this.requestNotificationPermission();
 
@@ -1624,6 +1632,7 @@ class App {
     this.assessmentView.reset();
     this.pipeline.reset();
     this.tabManager.reset();
+    this.summaryView.reset();
     this.stateManager.clearState();
     window.SmartsheetIntegration?.clearCurrentRowId();
 
